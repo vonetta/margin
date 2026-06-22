@@ -231,3 +231,29 @@ describe("POST /api/profile/sops", () => {
     expect(res.body.errors[0].msg).toBe("Content is required");
   });
 });
+
+describe("Role enforcement on profile edits", () => {
+  it("rejects a team-role user from editing voice profile", async () => {
+    await User.deleteMany({ email: "team-test@ktm.com" });
+    const teamRes = await request(app).post("/api/auth/register").send({
+      email: "team-test@ktm.com",
+      password: "Password123",
+      name: "Team Member",
+      ministry_id: "ktm-test",
+      role: "team",
+    });
+
+    const teamToken = teamRes.body.token;
+
+    const res = await request(app)
+      .put("/api/profile/voice")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({ persona_name: "Should Not Work" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("Insufficient permissions");
+
+    await User.deleteMany({ email: "team-test@ktm.com" });
+  });
+});

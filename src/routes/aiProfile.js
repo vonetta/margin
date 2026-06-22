@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const AiProfile = require("../models/AiProfile");
+const { requireRole } = require("../middleware/auth");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -29,6 +30,7 @@ router.get("/", async (req, res) => {
 // Update voice profile fields
 router.put(
   "/voice",
+  requireRole("admin", "leader"),
   [
     body("persona_name")
       .optional()
@@ -76,7 +78,7 @@ router.put(
       const profile = await AiProfile.findOneAndUpdate(
         { ministry_id: req.ministryId },
         { $set: updates },
-        { new: true, runValidators: true },
+        { returnDocument: "after", runValidators: true },
       );
 
       if (!profile) {
@@ -94,6 +96,7 @@ router.put(
 // Add a sample phrase
 router.post(
   "/phrases",
+  requireRole("admin", "leader"),
   [body("phrase").trim().notEmpty().withMessage("Phrase is required")],
   validate,
   async (req, res) => {
@@ -119,6 +122,7 @@ router.post(
 // Remove a sample phrase
 router.delete(
   "/phrases",
+  requireRole("admin", "leader"),
   [body("phrase").trim().notEmpty().withMessage("Phrase is required")],
   validate,
   async (req, res) => {
@@ -144,6 +148,7 @@ router.delete(
 // Log feedback from Ap Khy's review — this is the profile tweak loop
 router.post(
   "/feedback",
+  requireRole("admin", "leader"),
   [
     body("feedback").trim().notEmpty().withMessage("Feedback is required"),
     body("draft_title").optional().trim(),
@@ -189,6 +194,7 @@ router.post(
 // Add a new SOP chunk
 router.post(
   "/sops",
+  requireRole("admin", "leader"),
   [
     body("title").trim().notEmpty().withMessage("Title is required"),
     body("content").trim().notEmpty().withMessage("Content is required"),
