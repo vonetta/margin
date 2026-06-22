@@ -1,0 +1,38 @@
+{
+  "name": "margin",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "test": "NODE_ENV=test jest --runInBand --watchAll --no-coverage",
+    "seed": "node src/config/seed.js",
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test:coverage": "jest --coverage"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "express-validator": "^7.3.2",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.7.1",
+    "nodemon": "^3.1.14"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2"
+  }
+}
