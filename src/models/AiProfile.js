@@ -8,6 +8,27 @@ const chunkSchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now },
 });
 
+const fontSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    roles: [{ type: String, enum: ["display", "body", "accent", "script"] }],
+    tones: [{ type: String }],
+    google_font: { type: Boolean, default: true },
+    weights: [{ type: String }],
+  },
+  { _id: false },
+);
+
+const typeSystemSchema = new mongoose.Schema(
+  {
+    fonts: [fontSchema],
+    default_display: { type: String },
+    default_body: { type: String },
+    tone_keywords: { type: Map, of: [String] },
+  },
+  { _id: false },
+);
+
 const aiProfileSchema = new mongoose.Schema({
   ministry_id: { type: String, required: true, unique: true },
   voice_profile: {
@@ -30,6 +51,7 @@ const aiProfileSchema = new mongoose.Schema({
   ctas: { type: Map, of: String },
   visual_prohibitions: [{ type: String }],
   updated_at: { type: Date, default: Date.now },
+  type_system: typeSystemSchema,
 });
 
 module.exports = mongoose.model("AiProfile", aiProfileSchema);
