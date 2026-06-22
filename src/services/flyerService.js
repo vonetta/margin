@@ -5,27 +5,28 @@ const { buildFlyerHtml, DIMENSIONS } = require("./flyerTemplate");
 const { renderHtmlToPng } = require("./flyerRenderer");
 
 const generateFlyer = async ({
-  size = "social",
+  size = 'social',
   content = {},
   branding = {},
   typeSystem = null,
   qrUrl = null,
+  host = null,
+  speakers = []
 }) => {
   const toneSource = [content.title, content.subtitle, content.event_type]
     .filter(Boolean)
-    .join(" ");
+    .join(' ');
 
   const typography = selectTypography(typeSystem, toneSource);
 
-  const fontsUrl =
-    typeSystem && typeSystem.fonts
-      ? buildGoogleFontsUrl(typeSystem.fonts)
-      : null;
+  const fontsUrl = typeSystem && typeSystem.fonts
+    ? buildGoogleFontsUrl(typeSystem.fonts)
+    : null;
 
   let qrDataUrl = null;
   if (qrUrl) {
     qrDataUrl = await generateQRCode(qrUrl, {
-      darkColor: branding.colors?.primary || "#000000",
+      darkColor: branding.colors?.primary || '#000000'
     });
   }
 
@@ -34,8 +35,10 @@ const generateFlyer = async ({
     typography,
     branding,
     content,
+    host,
+    speakers,
     qrDataUrl,
-    fontsUrl,
+    fontsUrl
   });
 
   const dims = DIMENSIONS[size] || DIMENSIONS.social;
@@ -49,7 +52,9 @@ const generateFlyer = async ({
       tone: typography.tone,
       fonts_used: typography.fonts_used,
       has_qr: !!qrDataUrl,
-    },
+      host: host?.name || null,
+      speaker_count: speakers.length
+    }
   };
 };
 
