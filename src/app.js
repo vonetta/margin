@@ -10,6 +10,7 @@ const authRoutes = require("./routes/auth");
 const ministryRoutes = require("./routes/ministry");
 const aiProfileRoutes = require("./routes/aiProfile");
 const contentRoutes = require("./routes/content");
+const peopleRoutes = require("./routes/people");
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ app.use("/api", authMiddleware);
 app.use("/api/ministry", ministryRoutes);
 app.use("/api/profile", aiProfileRoutes);
 app.use("/api/content", contentRoutes);
+app.use('/api/people', peopleRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });

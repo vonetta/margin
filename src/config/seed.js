@@ -167,6 +167,69 @@ const seedKTM = async () => {
         "Em dashes in copy or graphics",
         "Logo clear space violations — minimum clear space equals height of capital K in wordmark",
       ],
+      type_system: {
+        default_display: "Cinzel",
+        default_body: "Montserrat",
+        fonts: [
+          {
+            name: "Cinzel",
+            roles: ["display"],
+            tones: ["formal", "classic"],
+            google_font: true,
+            weights: ["400", "500", "600"],
+          },
+          {
+            name: "Cormorant Garamond",
+            roles: ["display"],
+            tones: ["warm", "classic"],
+            google_font: true,
+            weights: ["400", "500", "600"],
+          },
+          {
+            name: "Montserrat",
+            roles: ["body", "display"],
+            tones: ["formal", "warm", "energetic", "modern"],
+            google_font: true,
+            weights: ["300", "400", "500", "600"],
+          },
+          {
+            name: "Poppins",
+            roles: ["display", "body"],
+            tones: ["energetic", "modern"],
+            google_font: true,
+            weights: ["400", "500", "600"],
+          },
+          {
+            name: "Great Vibes",
+            roles: ["script", "accent"],
+            tones: ["warm", "classic"],
+            google_font: true,
+            weights: ["400"],
+          },
+        ],
+
+        tone_keywords: {
+          formal: [
+            "ordination",
+            "conference",
+            "training",
+            "intensive",
+            "licensing",
+            "apostolic",
+            "leadership",
+          ],
+          warm: [
+            "retreat",
+            "worship",
+            "fellowship",
+            "koinonia",
+            "community",
+            "prayer",
+          ],
+          energetic: ["youth", "revival", "celebration", "night"],
+          classic: ["anniversary", "dedication", "ceremony"],
+        },
+      },
     });
 
     console.log(`AI profile created for: ${aiProfile.ministry_id}`);
