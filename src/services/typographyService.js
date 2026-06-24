@@ -1,12 +1,17 @@
 const inferTone = (eventText = "", toneKeywords = {}) => {
   const text = eventText.toLowerCase();
 
-  if (!toneKeywords || Object.keys(toneKeywords).length === 0) {
+  const entries =
+    toneKeywords instanceof Map
+      ? Array.from(toneKeywords.entries())
+      : Object.entries(toneKeywords || {});
+
+  if (entries.length === 0) {
     return null;
   }
 
   const scores = {};
-  for (const [tone, keywords] of Object.entries(toneKeywords)) {
+  for (const [tone, keywords] of entries) {
     scores[tone] = (keywords || []).reduce((count, kw) => {
       return count + (text.includes(kw.toLowerCase()) ? 1 : 0);
     }, 0);

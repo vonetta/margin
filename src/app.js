@@ -11,8 +11,11 @@ const ministryRoutes = require("./routes/ministry");
 const aiProfileRoutes = require("./routes/aiProfile");
 const contentRoutes = require("./routes/content");
 const peopleRoutes = require("./routes/people");
-
-dotenv.config();
+const backgroundRoutes = require("./routes/backgrounds");
+const flyerRoutes = require("./routes/flyers");
+dotenv.config({
+  path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
+});
 
 connectDB();
 
@@ -49,10 +52,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api", tenantMiddleware);
 app.use("/api", authMiddleware);
 
+app.use("/api/flyers", flyerRoutes);
+app.use("/api/backgrounds", backgroundRoutes);
 app.use("/api/ministry", ministryRoutes);
 app.use("/api/profile", aiProfileRoutes);
 app.use("/api/content", contentRoutes);
-app.use('/api/people', peopleRoutes);
+app.use("/api/people", peopleRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });
