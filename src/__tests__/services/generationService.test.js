@@ -27,6 +27,7 @@ const profile = {
 };
 
 const ministry = {
+  ministry_id: "ktm",
   name: "Khy Traylor Global Ministries",
   entity_boundary: "Never mix KTM and Salt & Light content.",
 };
@@ -118,6 +119,86 @@ describe("chatTurn", () => {
       done: true,
       caption: "Final caption text",
       event: { title: "Worship Workshop", date: "July 20" },
+    });
+  });
+
+  it("does not offer switch_ministry when there are no sibling ministries", async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: "text", text: "What's the date?" }],
+    });
+
+    await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "We have an event" }],
+      availableMinistries: [{ ministry_id: "ktm", name: "KTM" }],
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: [expect.objectContaining({ name: "finalize_caption" })],
+      }),
+    );
+  });
+
+  it("offers switch_ministry when a sibling ministry is available", async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: "text", text: "What's the date?" }],
+    });
+
+    await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "We have an event" }],
+      availableMinistries: [
+        { ministry_id: "ktm", name: "KTM" },
+        { ministry_id: "salt-light", name: "Salt & Light" },
+      ],
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.arrayContaining([
+          expect.objectContaining({ name: "switch_ministry" }),
+        ]),
+      }),
+    );
+  });
+
+  it("returns switchTo when the model calls switch_ministry", async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        {
+          type: "tool_use",
+          name: "switch_ministry",
+          input: {
+            ministry_id: "salt-light",
+            note: "Got it — continuing this under Salt & Light.",
+          },
+        },
+      ],
+    });
+
+    const result = await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "It's a Salt & Light event" }],
+      availableMinistries: [
+        { ministry_id: "ktm", name: "KTM" },
+        { ministry_id: "salt-light", name: "Salt & Light" },
+      ],
+    });
+
+    expect(result).toEqual({
+      done: false,
+      switchTo: {
+        ministry_id: "salt-light",
+        note: "Got it — continuing this under Salt & Light.",
+      },
+      message: "Got it — continuing this under Salt & Light.",
     });
   });
 });

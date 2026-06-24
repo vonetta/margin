@@ -6,6 +6,7 @@ const { generateContent, chatTurn } = require("../services/generationService");
 const { extractFlyerDetails } = require("../services/imageService");
 const AiProfile = require("../models/AiProfile");
 const ContentDraft = require("../models/ContentDraft");
+const Ministry = require("../models/Ministry");
 const { requireRole } = require("../middleware/auth");
 
 const upload = multer({
@@ -125,20 +126,32 @@ router.post(
           .json({ error: "AI profile not found for this ministry" });
       }
 
+      const ministryIds = req.user.ministries.map((m) => m.ministry_id);
+      const availableMinistries = await Ministry.find(
+        { ministry_id: { $in: ministryIds } },
+        "ministry_id name",
+      );
+
       const result = await chatTurn({
         profile,
         ministry: req.ministry,
         platform,
         messages,
+        availableMinistries,
       });
 
-      const replyContent = result.done ? result.caption : result.message;
+      const replyContent = result.done
+        ? result.caption
+        : result.switchTo
+          ? result.switchTo.note
+          : result.message;
 
       res.json({
         done: result.done,
         caption: result.done ? result.caption : undefined,
         event: result.done ? result.event : undefined,
-        message: result.done ? undefined : result.message,
+        message: result.done || result.switchTo ? undefined : result.message,
+        switchTo: result.switchTo || undefined,
         messages: [...messages, { role: "assistant", content: replyContent }],
       });
     } catch (error) {

@@ -174,32 +174,92 @@ const FINALIZE_TOOL = {
   },
 };
 
-const buildChatSystemPrompt = (profile, ministry, platform) =>
-  `${buildSystemPrompt(profile, ministry)}
+const SWITCH_MINISTRY_TOOL = {
+  name: "switch_ministry",
+  description:
+    "Call this once the user has confirmed the content actually belongs to a different ministry you have access to, instead of the one currently active. This hands off to that ministry's own voice, branding, and hashtags — do not write or finalize any caption on this turn, the conversation will continue under the correct ministry afterward.",
+  input_schema: {
+    type: "object",
+    properties: {
+      ministry_id: {
+        type: "string",
+        description: "The ministry_id of the other ministry to switch to.",
+      },
+      note: {
+        type: "string",
+        description:
+          "One short sentence confirming the switch, shown to the user (e.g. \"Got it — continuing this under Salt & Light.\").",
+      },
+    },
+    required: ["ministry_id", "note"],
+  },
+};
+
+const buildChatSystemPrompt = (
+  profile,
+  ministry,
+  platform,
+  availableMinistries = [],
+) => {
+  const siblings = availableMinistries.filter(
+    (m) => m.ministry_id !== ministry.ministry_id,
+  );
+  const siblingSection = siblings.length
+    ? `\n\nOTHER MINISTRIES YOU HAVE ACCESS TO\n\nThe person you're talking to also has access to: ${siblings
+        .map((m) => `${m.name} (ministry_id: "${m.ministry_id}")`)
+        .join(", ")}. If the content actually belongs to one of these instead of ${ministry.name}, ask the user to confirm which one — don't guess. Once they confirm, call the switch_ministry tool with that ministry_id instead of writing the caption yourself; you don't have that ministry's voice profile loaded, so anything you wrote here would be in the wrong voice.`
+    : "";
+
+  return `${buildSystemPrompt(profile, ministry)}
 
 CONVERSATIONAL MODE
 
 You are now in a back-and-forth conversation with a ministry team member who wants content created for ${platform}. You will often not have everything you need on the first message. Some messages will describe a flyer that's already been made (sometimes as an extracted summary of an uploaded image) — treat those facts as already known and don't ask the user to repeat them.
 
 If you are missing information that would materially change what you write, ask exactly ONE short, specific question per turn. Do not ask more than one question at a time, and do not call the finalize_caption tool on a turn where you ask a question. Reasons to ask:
-- Which entity this belongs to (KTM or Salt & Light) is unclear from what's been shared.
-- The event is co-hosted, partnered, or otherwise doesn't cleanly belong to either entity — ask directly whether this is a partnered event and how it should be framed. A partnered event can still be written in the ministry's voice once you know who else is involved and what the entity boundary should be for this piece. Don't refuse to write it just because it doesn't fit neatly.
-- The audience, spiritual framing/series tie-in, cost, registration link, or location is needed for this platform and hasn't been given.
+- The event is co-hosted, partnered, or otherwise doesn't cleanly belong to ${ministry.name} — ask directly whether this is a partnered event and how it should be framed. A partnered event can still be written in this ministry's voice once you know who else is involved. Don't refuse to write it just because it doesn't fit neatly.
+- The audience, spiritual framing/series tie-in, cost, registration link, or location is needed for this platform and hasn't been given.${siblingSection}
 
-Once you have enough to write complete, accurate content, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it. Always include the \`event\` object in that call when the content is about a specific event, with whatever structured fields (title, date, location, cost, cta, registration_url) were mentioned, so a matching flyer can be generated from the same facts without asking the user to retype them.`;
+Once you have enough to write complete, accurate content for ${ministry.name}, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it. Always include the \`event\` object in that call when the content is about a specific event, with whatever structured fields (title, date, location, cost, cta, registration_url) were mentioned, so a matching flyer can be generated from the same facts without asking the user to retype them.`;
+};
 
-const chatTurn = async ({ profile, ministry, platform, messages }) => {
+const chatTurn = async ({
+  profile,
+  ministry,
+  platform,
+  messages,
+  availableMinistries = [],
+}) => {
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
+  const tools = [FINALIZE_TOOL];
+  if (availableMinistries.some((m) => m.ministry_id !== ministry.ministry_id)) {
+    tools.push(SWITCH_MINISTRY_TOOL);
+  }
+
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
-    system: buildChatSystemPrompt(profile, ministry, platform),
-    tools: [FINALIZE_TOOL],
+    system: buildChatSystemPrompt(profile, ministry, platform, availableMinistries),
+    tools,
     messages,
   });
+
+  const switchUse = response.content.find(
+    (block) => block.type === "tool_use" && block.name === "switch_ministry",
+  );
+  if (switchUse) {
+    return {
+      done: false,
+      switchTo: {
+        ministry_id: switchUse.input.ministry_id,
+        note: switchUse.input.note,
+      },
+      message: switchUse.input.note,
+    };
+  }
 
   const toolUse = response.content.find(
     (block) => block.type === "tool_use" && block.name === "finalize_caption",

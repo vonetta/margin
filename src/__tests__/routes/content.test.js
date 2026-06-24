@@ -342,6 +342,38 @@ describe("POST /api/content/chat", () => {
     });
   });
 
+  it("passes through a switchTo hand-off without finalizing or asking a question", async () => {
+    mockChatTurn.mockResolvedValue({
+      done: false,
+      switchTo: {
+        ministry_id: "second-test",
+        note: "Got it — continuing this under Second Ministry.",
+      },
+      message: "Got it — continuing this under Second Ministry.",
+    });
+
+    const res = await request(app)
+      .post("/api/content/chat")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        messages: [{ role: "user", content: "It's for the other ministry" }],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.done).toBe(false);
+    expect(res.body.switchTo).toEqual({
+      ministry_id: "second-test",
+      note: "Got it — continuing this under Second Ministry.",
+    });
+    expect(res.body.message).toBeUndefined();
+    expect(res.body.messages[1]).toEqual({
+      role: "assistant",
+      content: "Got it — continuing this under Second Ministry.",
+    });
+  });
+
   it("rejects a message history that doesn't end with the user", async () => {
     const res = await request(app)
       .post("/api/content/chat")
