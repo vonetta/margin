@@ -4,7 +4,7 @@ const multer = require("multer");
 const Person = require("../models/Person");
 const { body, validationResult } = require("express-validator");
 const { requireRole } = require("../middleware/auth");
-const { uploadFile, deleteFile } = require("../services/storageService");
+const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { removeBackground } = require("../services/imageService");
 const { whiteToTransparent } = require("../services/cutoutService");
 
@@ -155,20 +155,8 @@ router.post(
       }
 
       // Clean up old files if replacing
-      if (person.headshot_key) {
-        try {
-          await deleteFile(person.headshot_key);
-        } catch (e) {
-          console.error("Old headshot delete failed:", e.message);
-        }
-      }
-      if (person.cutout_key) {
-        try {
-          await deleteFile(person.cutout_key);
-        } catch (e) {
-          console.error("Old cutout delete failed:", e.message);
-        }
-      }
+      if (person.headshot_key) await safeDeleteFile(person.headshot_key);
+      if (person.cutout_key) await safeDeleteFile(person.cutout_key);
 
       // 1. Store the original
       const original = await uploadFile({
@@ -231,13 +219,8 @@ router.delete("/:id", requireRole("admin", "leader"), async (req, res) => {
       return res.status(404).json({ error: "Person not found" });
     }
 
-    if (person.headshot_key) {
-      try {
-        await deleteFile(person.headshot_key);
-      } catch (e) {
-        console.error("Failed to delete headshot:", e.message);
-      }
-    }
+    if (person.headshot_key) await safeDeleteFile(person.headshot_key);
+    if (person.cutout_key) await safeDeleteFile(person.cutout_key);
 
     await Person.deleteOne({ _id: person._id });
     res.json({ deleted: true, id: req.params.id });

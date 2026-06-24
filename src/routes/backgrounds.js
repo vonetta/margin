@@ -4,7 +4,7 @@ const { body, validationResult } = require("express-validator");
 const Background = require("../models/Background");
 const { requireRole } = require("../middleware/auth");
 const { generateBackground } = require("../services/imageService");
-const { uploadFile, deleteFile } = require("../services/storageService");
+const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const Ministry = require("../models/Ministry");
 
 // Compose a brand-aware prompt: user describes mood, ministry palette steers color.
@@ -105,11 +105,7 @@ router.delete("/:id", requireRole("admin", "leader"), async (req, res) => {
       return res.status(404).json({ error: "Background not found" });
     }
 
-    try {
-      await deleteFile(background.key);
-    } catch (e) {
-      console.error("Failed to delete background file:", e.message);
-    }
+    await safeDeleteFile(background.key);
 
     await Background.deleteOne({ _id: background._id });
     res.json({ deleted: true, id: req.params.id });

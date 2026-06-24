@@ -11,10 +11,11 @@ jest.mock("../../services/storageService", () => ({
     url: "https://pub-test.r2.dev/ktm-test/flyers/f-abc.png",
   }),
   deleteFile: jest.fn().mockResolvedValue({ deleted: true }),
+  safeDeleteFile: jest.fn().mockResolvedValue({ deleted: true }),
 }));
 
 const request = require("supertest");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Flyer = require("../../models/Flyer");
@@ -31,7 +32,7 @@ const testMinistry = {
 let adminToken, teamToken;
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 afterAll(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
@@ -40,7 +41,6 @@ afterAll(async () => {
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
-  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {

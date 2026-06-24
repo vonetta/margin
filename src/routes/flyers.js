@@ -7,7 +7,7 @@ const Ministry = require("../models/Ministry");
 const AiProfile = require("../models/AiProfile");
 const { requireRole } = require("../middleware/auth");
 const { generateFlyer } = require("../services/flyerService");
-const { uploadFile, deleteFile } = require("../services/storageService");
+const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { listLayouts, suggestLayout } = require("../services/layouts");
 
 const validate = (req, res, next) => {
@@ -169,13 +169,7 @@ router.delete("/:id", requireRole("admin", "leader"), async (req, res) => {
     if (!flyer) return res.status(404).json({ error: "Flyer not found" });
 
     for (const key of [flyer.social_key, flyer.print_key]) {
-      if (key) {
-        try {
-          await deleteFile(key);
-        } catch (e) {
-          console.error("Flyer file delete failed:", e.message);
-        }
-      }
+      if (key) await safeDeleteFile(key);
     }
     await Flyer.deleteOne({ _id: flyer._id });
     res.json({ deleted: true, id: req.params.id });

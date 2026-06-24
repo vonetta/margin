@@ -17,6 +17,11 @@ jest.mock("../../services/cutoutService", () => ({
     .mockResolvedValue(Buffer.from("transparent-cutout")),
 }));
 
+const mockFailedDeletionCreate = jest.fn().mockResolvedValue({});
+jest.mock("../../models/FailedDeletion", () => ({
+  create: mockFailedDeletionCreate,
+}));
+
 process.env.R2_BUCKET = "margin-media";
 process.env.R2_PUBLIC_URL = "https://pub-test.r2.dev";
 process.env.R2_ENDPOINT = "https://test.r2.cloudflarestorage.com";
@@ -26,6 +31,7 @@ process.env.R2_SECRET_ACCESS_KEY = "test";
 const {
   uploadFile,
   deleteFile,
+  safeDeleteFile,
   sanitizeName,
 } = require("../../services/storageService");
 
@@ -110,5 +116,34 @@ describe("deleteFile", () => {
 
   it("requires a key", async () => {
     await expect(deleteFile()).rejects.toThrow("key is required");
+  });
+});
+
+describe("safeDeleteFile", () => {
+  beforeEach(() => {
+    mockSend.mockClear();
+    mockFailedDeletionCreate.mockClear();
+    mockSend.mockResolvedValue({});
+  });
+
+  it("deletes successfully without recording a failure", async () => {
+    const result = await safeDeleteFile("ktm/headshots/apostle-khy-a3f9.jpg");
+    expect(result).toEqual({
+      deleted: true,
+      key: "ktm/headshots/apostle-khy-a3f9.jpg",
+    });
+    expect(mockFailedDeletionCreate).not.toHaveBeenCalled();
+  });
+
+  it("swallows a delete failure and records it instead of throwing", async () => {
+    mockSend.mockRejectedValueOnce(new Error("R2 credentials rejected"));
+
+    const result = await safeDeleteFile("ktm/headshots/broken-key.jpg");
+
+    expect(result).toEqual({ deleted: false, key: "ktm/headshots/broken-key.jpg" });
+    expect(mockFailedDeletionCreate).toHaveBeenCalledWith({
+      key: "ktm/headshots/broken-key.jpg",
+      reason: "R2 credentials rejected",
+    });
   });
 });

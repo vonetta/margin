@@ -11,10 +11,11 @@ jest.mock("../../services/storageService", () => ({
     url: "https://pub-test.r2.dev/ktm-test/backgrounds/bg-abc123.png",
   }),
   deleteFile: jest.fn().mockResolvedValue({ deleted: true }),
+  safeDeleteFile: jest.fn().mockResolvedValue({ deleted: true }),
 }));
 
 const request = require("supertest");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Background = require("../../models/Background");
@@ -30,7 +31,7 @@ let adminToken;
 let teamToken;
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
@@ -39,7 +40,6 @@ afterAll(async () => {
   await User.deleteMany({
     email: { $in: ["bg-admin@ktm.com", "bg-team@ktm.com"] },
   });
-  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {

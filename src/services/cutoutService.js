@@ -8,6 +8,16 @@ const whiteToTransparent = async (inputBuffer, { threshold = 240 } = {}) => {
   const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
   const { width, height, channels } = info;
 
+  // ensureAlpha() should always produce 4 channels, but if it ever doesn't
+  // (an unexpected color space, a future sharp version), indexing below
+  // would write the alpha byte into the wrong channel and silently
+  // corrupt colors instead of failing loudly.
+  if (channels !== 4) {
+    throw new Error(
+      `Expected 4 channels (RGBA) after ensureAlpha, got ${channels}`,
+    );
+  }
+
   const isWhite = (idx) =>
     data[idx] >= threshold &&
     data[idx + 1] >= threshold &&

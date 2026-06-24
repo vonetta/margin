@@ -1,5 +1,5 @@
 const request = require("supertest");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
 const User = require("../../models/User");
 const Ministry = require("../../models/Ministry");
@@ -25,7 +25,7 @@ const testUser = {
 };
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
@@ -33,7 +33,6 @@ afterAll(async () => {
   await Ministry.deleteMany({
     ministry_id: { $in: ["ktm-test", "second-test"] },
   });
-  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {

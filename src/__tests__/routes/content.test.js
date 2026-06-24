@@ -1,5 +1,5 @@
 const request = require("supertest");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const AiProfile = require("../../models/AiProfile");
@@ -43,7 +43,7 @@ const testProfile = {
 let authToken;
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
@@ -51,7 +51,6 @@ afterAll(async () => {
   await AiProfile.deleteMany({ ministry_id: "ktm-test" });
   await ContentDraft.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({ email: "content-test@ktm.com" });
-  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {

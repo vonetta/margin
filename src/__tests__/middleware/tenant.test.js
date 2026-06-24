@@ -1,14 +1,13 @@
 const request = require("supertest");
 const app = require("../../app");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const Ministry = require("../../models/Ministry");
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
-  await mongoose.connection.close(true);
 });
 
 afterEach(async () => {

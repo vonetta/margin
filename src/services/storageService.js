@@ -85,4 +85,34 @@ const deleteFile = async (key) => {
   return { deleted: true, key };
 };
 
-module.exports = { uploadFile, deleteFile, sanitizeName, ALLOWED_TYPES };
+// Best-effort delete for cleanup paths (replacing/removing a record) where
+// the storage call failing shouldn't block the DB operation. Records the
+// key in FailedDeletion instead of only logging, so an orphaned R2 object
+// can actually be found and cleaned up later rather than scrolling off in
+// console output.
+const safeDeleteFile = async (key) => {
+  try {
+    await deleteFile(key);
+    return { deleted: true, key };
+  } catch (error) {
+    console.error(`Failed to delete storage key ${key}:`, error.message);
+    try {
+      const FailedDeletion = require("../models/FailedDeletion");
+      await FailedDeletion.create({ key, reason: error.message });
+    } catch (logError) {
+      console.error(
+        `Also failed to record failed deletion for ${key}:`,
+        logError.message,
+      );
+    }
+    return { deleted: false, key };
+  }
+};
+
+module.exports = {
+  uploadFile,
+  deleteFile,
+  safeDeleteFile,
+  sanitizeName,
+  ALLOWED_TYPES,
+};

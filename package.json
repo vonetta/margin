@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "test": "NODE_ENV=test jest --runInBand --watchAll --no-coverage",
+    "test": "NODE_ENV=test jest --runInBand --no-coverage --forceExit",
+    "test:watch": "NODE_ENV=test jest --runInBand --watchAll --no-coverage --forceExit",
     "seed": "node src/config/seed.js",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "NODE_ENV=test jest --runInBand --coverage --forceExit"
   },
   "jest": {
     "globalSetup": "./jest.globalSetup.js",

@@ -12,19 +12,18 @@ jest.mock("../../services/storageService", () => ({
 require("dotenv").config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
 });
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const { selectBackground } = require("../../services/backgroundSelector");
 const Background = require("../../models/Background");
 const Ministry = require("../../models/Ministry");
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
   await Background.deleteMany({ ministry_id: "ktm-test" });
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
-  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {
