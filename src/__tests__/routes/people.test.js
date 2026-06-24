@@ -6,6 +6,17 @@ jest.mock("../../services/storageService", () => ({
   deleteFile: jest.fn().mockResolvedValue({ deleted: true }),
 }));
 
+jest.mock("../../services/imageService", () => ({
+  removeBackground: jest.fn().mockResolvedValue(Buffer.from("white-bg-image")),
+  MODEL_ID: "gemini-2.5-flash-image",
+}));
+
+jest.mock("../../services/cutoutService", () => ({
+  whiteToTransparent: jest
+    .fn()
+    .mockResolvedValue(Buffer.from("transparent-cutout")),
+}));
+
 const request = require("supertest");
 const mongoose = require("mongoose");
 const app = require("../../app");
@@ -32,7 +43,7 @@ afterAll(async () => {
   await User.deleteMany({
     email: { $in: ["people-admin@ktm.com", "people-team@ktm.com"] },
   });
-  await mongoose.connection.close();
+  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {

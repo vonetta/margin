@@ -6,6 +6,17 @@ jest.mock("@aws-sdk/client-s3", () => ({
   DeleteObjectCommand: jest.fn((args) => ({ ...args })),
 }));
 
+jest.mock("../../services/imageService", () => ({
+  removeBackground: jest.fn().mockResolvedValue(Buffer.from("white-bg-image")),
+  MODEL_ID: "gemini-2.5-flash-image",
+}));
+
+jest.mock("../../services/cutoutService", () => ({
+  whiteToTransparent: jest
+    .fn()
+    .mockResolvedValue(Buffer.from("transparent-cutout")),
+}));
+
 process.env.R2_BUCKET = "margin-media";
 process.env.R2_PUBLIC_URL = "https://pub-test.r2.dev";
 process.env.R2_ENDPOINT = "https://test.r2.cloudflarestorage.com";

@@ -9,8 +9,10 @@ const personSchema = new mongoose.Schema({
     enum: ["host", "speaker", "leader", "member", "staff"],
     default: "member",
   },
-  headshot_url: { type: String },
+  headshot_url: { type: String }, // original uploaded photo
   headshot_key: { type: String },
+  cutout_url: { type: String }, // transparent cut-out for flyers
+  cutout_key: { type: String },
   bio: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
   active: { type: Boolean, default: true },

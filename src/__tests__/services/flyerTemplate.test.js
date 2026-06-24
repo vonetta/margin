@@ -1,4 +1,5 @@
 const { buildFlyerHtml, DIMENSIONS } = require("../../services/flyerTemplate");
+const { speakerColumns } = require("../../services/flyerTemplate");
 
 const baseInput = {
   size: "social",
@@ -89,5 +90,73 @@ describe("buildFlyerHtml", () => {
   it("falls back to safe fonts when typography is missing", () => {
     const html = buildFlyerHtml({ ...baseInput, typography: null });
     expect(html).toContain("Georgia");
+  });
+});
+
+describe("speakerColumns", () => {
+  it("uses 1 column for a single speaker", () => {
+    expect(speakerColumns(1)).toBe(1);
+  });
+  it("uses 2 columns for two speakers", () => {
+    expect(speakerColumns(2)).toBe(2);
+  });
+  it("uses 3 columns for three speakers", () => {
+    expect(speakerColumns(3)).toBe(3);
+  });
+  it("uses 2 columns for four speakers", () => {
+    expect(speakerColumns(4)).toBe(2);
+  });
+});
+
+describe("buildFlyerHtml with people", () => {
+  it("renders a host hero block when host has a photo", () => {
+    const html = buildFlyerHtml({
+      ...baseInput,
+      host: {
+        name: "Apostle Khy",
+        title: "Host",
+        role: "Host",
+        headshot_url: "https://pub-test.r2.dev/ktm/headshots/khy.jpg",
+      },
+    });
+    expect(html).toContain("hero-photo");
+    expect(html).toContain("Apostle Khy");
+    expect(html).toContain("khy.jpg");
+  });
+
+  it("renders speaker cards", () => {
+    const html = buildFlyerHtml({
+      ...baseInput,
+      speakers: [
+        {
+          name: "Jordan Franco",
+          title: "Apostle",
+          headshot_url: "https://pub-test.r2.dev/ktm/headshots/jordan.jpg",
+        },
+        {
+          name: "Robert Rush",
+          title: "Apostle",
+          headshot_url: "https://pub-test.r2.dev/ktm/headshots/robert.jpg",
+        },
+      ],
+    });
+    expect(html).toContain("Jordan Franco");
+    expect(html).toContain("Robert Rush");
+    expect(html).toContain("sp-card");
+  });
+
+  it("renders an initial when a speaker has no photo", () => {
+    const html = buildFlyerHtml({
+      ...baseInput,
+      speakers: [{ name: "Anonymous Speaker", title: "Guest" }],
+    });
+    expect(html).toContain("sp-photo-empty");
+    expect(html).toContain(">A</div>");
+  });
+
+  it("omits hero when no host provided", () => {
+    const html = buildFlyerHtml(baseInput);
+    expect(html).not.toContain('class="hero"');
+    expect(html).not.toContain("background-image:url");
   });
 });
