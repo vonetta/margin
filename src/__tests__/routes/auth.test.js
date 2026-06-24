@@ -187,3 +187,29 @@ describe("Protected routes require auth", () => {
     expect(res.body.error).toBe("Invalid token");
   });
 });
+
+describe("GET /api/auth/me", () => {
+  it("enriches each membership with the ministry's name", async () => {
+    const registerRes = await request(app)
+      .post("/api/auth/register")
+      .send(testUser);
+
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${registerRes.body.token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.ministries).toHaveLength(1);
+    expect(res.body.ministries[0]).toMatchObject({
+      ministry_id: "ktm-test",
+      role: "admin",
+      name: "Khy Traylor Global Ministries",
+    });
+    expect(res.body.password).toBeUndefined();
+  });
+
+  it("returns 401 with no token", async () => {
+    const res = await request(app).get("/api/auth/me");
+    expect(res.status).toBe(401);
+  });
+});

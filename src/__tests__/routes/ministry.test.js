@@ -2,6 +2,7 @@ const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
+const AiProfile = require("../../models/AiProfile");
 const User = require("../../models/User");
 
 const testMinistry = {
@@ -24,19 +25,30 @@ const testMinistry = {
 };
 
 let authToken;
+let teamToken;
 
 beforeAll(async () => {
   await connectTestDB();
 });
 
 afterAll(async () => {
-  await Ministry.deleteMany({ ministry_id: "ktm-test" });
-  await User.deleteMany({ email: "ministry-test@ktm.com" });
+  await Ministry.deleteMany({
+    ministry_id: { $in: ["ktm-test", "salt-light-test"] },
+  });
+  await AiProfile.deleteMany({ ministry_id: "salt-light-test" });
+  await User.deleteMany({
+    email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com"] },
+  });
 });
 
 beforeEach(async () => {
-  await Ministry.deleteMany({ ministry_id: "ktm-test" });
-  await User.deleteMany({ email: "ministry-test@ktm.com" });
+  await Ministry.deleteMany({
+    ministry_id: { $in: ["ktm-test", "salt-light-test"] },
+  });
+  await AiProfile.deleteMany({ ministry_id: "salt-light-test" });
+  await User.deleteMany({
+    email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com"] },
+  });
   await Ministry.create(testMinistry);
 
   const res = await request(app).post("/api/auth/register").send({
@@ -46,6 +58,15 @@ beforeEach(async () => {
     ministry_id: "ktm-test",
     role: "admin",
   });
+
+  const teamRes = await request(app).post("/api/auth/register").send({
+    email: "ministry-team-test@ktm.com",
+    password: "Password123",
+    name: "Test Team",
+    ministry_id: "ktm-test",
+    role: "team",
+  });
+  teamToken = teamRes.body.token;
 
   authToken = res.body.token;
 });
@@ -145,5 +166,95 @@ describe("PUT /api/ministry", () => {
     expect(res.status).toBe(200);
     expect(res.body.ministry_id).toBe("ktm-test");
     expect(res.body.name).toBe("Legitimate update");
+  });
+});
+
+describe("POST /api/ministry/sub-ministries", () => {
+  it("creates a sub-ministry linked to the parent", async () => {
+    const res = await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ministry_id: "salt-light-test", name: "Salt & Light Test" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.ministry_id).toBe("salt-light-test");
+    expect(res.body.parent_ministry_id).toBe("ktm-test");
+
+    const profile = await AiProfile.findOne({
+      ministry_id: "salt-light-test",
+    });
+    expect(profile).not.toBeNull();
+  });
+
+  it("adds the creating admin as a member of the new sub-ministry", async () => {
+    await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ministry_id: "salt-light-test", name: "Salt & Light Test" });
+
+    const user = await User.findOne({ email: "ministry-test@ktm.com" });
+    const membership = user.getMembership("salt-light-test");
+    expect(membership).not.toBeNull();
+    expect(membership.role).toBe("admin");
+  });
+
+  it("rejects a duplicate ministry_id", async () => {
+    const res = await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ministry_id: "ktm-test", name: "Should fail" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects creation by a non-admin (leader/team)", async () => {
+    const res = await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({ ministry_id: "salt-light-test", name: "Salt & Light Test" });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects an invalid ministry_id slug", async () => {
+    const res = await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ministry_id: "Not A Slug!", name: "Salt & Light Test" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/ministry/sub-ministries", () => {
+  it("lists sub-ministries under the current ministry", async () => {
+    await Ministry.create({
+      ministry_id: "salt-light-test",
+      parent_ministry_id: "ktm-test",
+      name: "Salt & Light Test",
+    });
+
+    const res = await request(app)
+      .get("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].ministry_id).toBe("salt-light-test");
+  });
+
+  it("rejects access by a team member", async () => {
+    const res = await request(app)
+      .get("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+
+    expect(res.status).toBe(403);
   });
 });

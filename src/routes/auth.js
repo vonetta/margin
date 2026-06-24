@@ -163,7 +163,27 @@ router.get("/me", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json(user);
+    const ministryIds = user.ministries.map((m) => m.ministry_id);
+    const ministries = await Ministry.find(
+      { ministry_id: { $in: ministryIds } },
+      "ministry_id name tagline parent_ministry_id",
+    );
+    const ministryById = new Map(
+      ministries.map((m) => [m.ministry_id, m]),
+    );
+
+    const userJson = user.toJSON();
+    userJson.ministries = userJson.ministries.map((m) => {
+      const ministry = ministryById.get(m.ministry_id);
+      return {
+        ...m,
+        name: ministry?.name || m.ministry_id,
+        tagline: ministry?.tagline,
+        parent_ministry_id: ministry?.parent_ministry_id || null,
+      };
+    });
+
+    res.json(userJson);
   } catch (error) {
     res.status(401).json({ error: "Invalid token" });
   }

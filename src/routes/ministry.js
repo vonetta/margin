@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const Ministry = require("../models/Ministry");
+const AiProfile = require("../models/AiProfile");
+const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
 
 const validate = (req, res, next) => {
@@ -78,6 +80,95 @@ router.put(
       res.json(ministry);
     } catch (error) {
       res.status(500).json({ error: "Failed to update ministry" });
+    }
+  },
+);
+
+// GET /api/ministry/sub-ministries
+// List ministries linked under the current one. This is visibility only —
+// being able to see that a sub-ministry exists does not grant access to
+// it. Access to each sub-ministry's own data is entirely separate
+// membership, granted explicitly (e.g. at creation, or by that
+// sub-ministry's own admin).
+router.get(
+  "/sub-ministries",
+  requireRole("admin", "leader"),
+  async (req, res) => {
+    try {
+      const subMinistries = await Ministry.find({
+        parent_ministry_id: req.ministryId,
+      });
+      res.json(subMinistries);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sub-ministries" });
+    }
+  },
+);
+
+// POST /api/ministry/sub-ministries
+// Create a new, fully independent tenant linked under the current
+// ministry. Only an admin of the parent can do this. The creating admin
+// is added as an admin member of the new sub-ministry so they aren't
+// locked out of what they just made — that's the only access carried
+// over; anyone else who needs into the new ministry must be added there
+// directly, the same as any other tenant.
+router.post(
+  "/sub-ministries",
+  requireRole("admin"),
+  [
+    body("ministry_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Ministry ID is required")
+      .matches(/^[a-z0-9-]+$/)
+      .withMessage(
+        "Ministry ID must be lowercase letters, numbers, and hyphens only",
+      ),
+    body("name").trim().notEmpty().withMessage("Name is required"),
+    body("tagline").optional().trim(),
+    body("website").optional().trim().isURL(),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { ministry_id, name, tagline, website } = req.body;
+
+      const existing = await Ministry.findOne({ ministry_id });
+      if (existing) {
+        return res.status(400).json({ error: "Ministry ID already in use" });
+      }
+
+      const subMinistry = await Ministry.create({
+        ministry_id,
+        parent_ministry_id: req.ministryId,
+        name,
+        tagline,
+        website,
+      });
+
+      await AiProfile.create({
+        ministry_id,
+        voice_profile: {
+          persona_name: name,
+          sign_off: "",
+          tone_pillars: [],
+          sample_phrases: [],
+          avoid: [],
+        },
+        hashtags: { brand: [], content: [] },
+        sops: [],
+        templates: [],
+        recurring_content: [],
+      });
+
+      await User.findByIdAndUpdate(req.userId, {
+        $push: { ministries: { ministry_id, role: "admin" } },
+      });
+
+      res.status(201).json(subMinistry);
+    } catch (error) {
+      console.error("Sub-ministry creation error:", error);
+      res.status(500).json({ error: "Failed to create sub-ministry" });
     }
   },
 );
