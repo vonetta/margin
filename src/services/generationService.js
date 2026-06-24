@@ -144,4 +144,63 @@ ${prompt}`;
   return message.content[0].text;
 };
 
-module.exports = { generateContent, buildSystemPrompt };
+const FINALIZE_TOOL = {
+  name: "finalize_caption",
+  description:
+    "Submit the final, complete piece of content once you have everything you need to write it accurately. This ends the conversation.",
+  input_schema: {
+    type: "object",
+    properties: {
+      caption: {
+        type: "string",
+        description: "The final content, fully written and ready to post.",
+      },
+    },
+    required: ["caption"],
+  },
+};
+
+const buildChatSystemPrompt = (profile, ministry, platform) =>
+  `${buildSystemPrompt(profile, ministry)}
+
+CONVERSATIONAL MODE
+
+You are now in a back-and-forth conversation with a ministry team member who wants content created for ${platform}. You will often not have everything you need on the first message.
+
+If you are missing information that would materially change what you write, ask exactly ONE short, specific question per turn. Do not ask more than one question at a time, and do not call the finalize_caption tool on a turn where you ask a question. Reasons to ask:
+- Which entity this belongs to (KTM or Salt & Light) is unclear from what's been shared.
+- The event is co-hosted, partnered, or otherwise doesn't cleanly belong to either entity — ask directly whether this is a partnered event and how it should be framed. A partnered event can still be written in the ministry's voice once you know who else is involved and what the entity boundary should be for this piece. Don't refuse to write it just because it doesn't fit neatly.
+- The audience, spiritual framing/series tie-in, cost, registration link, or location is needed for this platform and hasn't been given.
+
+Once you have enough to write complete, accurate content, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it.`;
+
+const chatTurn = async ({ profile, ministry, platform, messages }) => {
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    system: buildChatSystemPrompt(profile, ministry, platform),
+    tools: [FINALIZE_TOOL],
+    messages,
+  });
+
+  const toolUse = response.content.find(
+    (block) => block.type === "tool_use" && block.name === "finalize_caption",
+  );
+  if (toolUse) {
+    return { done: true, caption: toolUse.input.caption };
+  }
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  return { done: false, message: textBlock ? textBlock.text : "" };
+};
+
+module.exports = {
+  generateContent,
+  buildSystemPrompt,
+  chatTurn,
+  buildChatSystemPrompt,
+};

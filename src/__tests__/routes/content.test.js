@@ -6,12 +6,14 @@ const AiProfile = require("../../models/AiProfile");
 const ContentDraft = require("../../models/ContentDraft");
 const User = require("../../models/User");
 
+const mockChatTurn = jest.fn();
 jest.mock("../../services/generationService", () => ({
   generateContent: jest
     .fn()
     .mockResolvedValue(
       "Worshipers, I believe this is your moment to be poured back into !!!\n\nJuly 20th we are hosting a Worship Workshop from 12pm to 6pm.\n\nSecure your spot today. Link in bio.\n\n#KTM #KhyTraylorMinistries #EquippingLeaders #ChangingLives",
     ),
+  chatTurn: (...args) => mockChatTurn(...args),
 }));
 
 const testMinistry = {
@@ -54,6 +56,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  mockChatTurn.mockReset();
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await AiProfile.deleteMany({ ministry_id: "ktm-test" });
   await ContentDraft.deleteMany({ ministry_id: "ktm-test" });
@@ -249,6 +252,130 @@ describe("PUT /api/content/drafts/:id/feedback", () => {
       .set("x-ministry-id", "ktm-test")
       .set("Authorization", `Bearer ${authToken}`)
       .send({ feedback: "" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/content/chat", () => {
+  it("returns a clarifying question when the model is not done", async () => {
+    mockChatTurn.mockResolvedValue({
+      done: false,
+      message: "Is this a KTM event or a Salt & Light event?",
+    });
+
+    const res = await request(app)
+      .post("/api/content/chat")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        messages: [{ role: "user", content: "We have an event next week" }],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.done).toBe(false);
+    expect(res.body.message).toBe(
+      "Is this a KTM event or a Salt & Light event?",
+    );
+    expect(res.body.messages).toHaveLength(2);
+    expect(res.body.messages[1]).toEqual({
+      role: "assistant",
+      content: "Is this a KTM event or a Salt & Light event?",
+    });
+  });
+
+  it("returns the finalized caption when the model is done", async () => {
+    mockChatTurn.mockResolvedValue({
+      done: true,
+      caption: "Final caption text",
+    });
+
+    const res = await request(app)
+      .post("/api/content/chat")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        messages: [
+          { role: "user", content: "We have an event next week" },
+          {
+            role: "assistant",
+            content: "Is this a KTM event or a Salt & Light event?",
+          },
+          { role: "user", content: "It's a KTM event" },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.done).toBe(true);
+    expect(res.body.caption).toBe("Final caption text");
+    expect(res.body.messages).toHaveLength(4);
+  });
+
+  it("rejects a message history that doesn't end with the user", async () => {
+    const res = await request(app)
+      .post("/api/content/chat")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        messages: [{ role: "assistant", content: "Hello" }],
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an empty messages array", async () => {
+    const res = await request(app)
+      .post("/api/content/chat")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ platform: "Instagram", messages: [] });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when there is no AI profile for the ministry", async () => {
+    await AiProfile.deleteMany({ ministry_id: "ktm-test" });
+
+    const res = await request(app)
+      .post("/api/content/chat")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        messages: [{ role: "user", content: "Hello" }],
+      });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/content/drafts", () => {
+  it("saves a finalized caption as a pending draft", async () => {
+    const res = await request(app)
+      .post("/api/content/drafts")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        caption: "Final caption text",
+        prompt: "We have an event next week",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe("pending");
+    expect(res.body.caption).toBe("Final caption text");
+    expect(res.body.platform).toBe("Instagram");
+  });
+
+  it("rejects a missing caption", async () => {
+    const res = await request(app)
+      .post("/api/content/drafts")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ platform: "Instagram", prompt: "We have an event next week" });
 
     expect(res.status).toBe(400);
   });

@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
-const { generateContent } = require("../services/generationService");
+const { generateContent, chatTurn } = require("../services/generationService");
 const AiProfile = require("../models/AiProfile");
 const ContentDraft = require("../models/ContentDraft");
 const { requireRole } = require("../middleware/auth");
@@ -69,6 +69,100 @@ router.post(
       res.status(500).json({
         error: "Content generation failed",
       });
+    }
+  },
+);
+
+// POST /api/content/chat — one turn of a back-and-forth content conversation.
+// The model either asks a clarifying question (done: false) or finalizes
+// the content via a tool call (done: true). The client owns the message
+// history and resends it in full each turn — no server-side session state.
+router.post(
+  "/chat",
+  [
+    body("platform")
+      .trim()
+      .notEmpty()
+      .withMessage("Platform is required")
+      .isIn(VALID_PLATFORMS)
+      .withMessage(`Platform must be one of: ${VALID_PLATFORMS.join(", ")}`),
+    body("messages")
+      .isArray({ min: 1 })
+      .withMessage("messages must be a non-empty array"),
+    body("messages.*.role").isIn(["user", "assistant"]),
+    body("messages.*.content").trim().notEmpty(),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { platform, messages } = req.body;
+
+      if (messages[messages.length - 1].role !== "user") {
+        return res
+          .status(400)
+          .json({ error: "The last message must be from the user" });
+      }
+
+      const profile = await AiProfile.findOne({ ministry_id: req.ministryId });
+      if (!profile) {
+        return res
+          .status(404)
+          .json({ error: "AI profile not found for this ministry" });
+      }
+
+      const result = await chatTurn({
+        profile,
+        ministry: req.ministry,
+        platform,
+        messages,
+      });
+
+      const replyContent = result.done ? result.caption : result.message;
+
+      res.json({
+        done: result.done,
+        caption: result.done ? result.caption : undefined,
+        message: result.done ? undefined : result.message,
+        messages: [...messages, { role: "assistant", content: replyContent }],
+      });
+    } catch (error) {
+      console.error("Chat generation error:", error);
+      res.status(500).json({ error: "Content generation failed" });
+    }
+  },
+);
+
+// POST /api/content/drafts — save an already-finalized chat caption to the
+// queue. No AI call here; the content was already finalized via /chat.
+router.post(
+  "/drafts",
+  [
+    body("platform")
+      .trim()
+      .notEmpty()
+      .isIn(VALID_PLATFORMS)
+      .withMessage(`Platform must be one of: ${VALID_PLATFORMS.join(", ")}`),
+    body("caption").trim().notEmpty().withMessage("Caption is required"),
+    body("prompt").trim().notEmpty().withMessage("Prompt is required"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { platform, caption, prompt } = req.body;
+
+      const draft = await ContentDraft.create({
+        ministry_id: req.ministryId,
+        prompt,
+        platform,
+        caption,
+        generated_by: req.userId,
+        status: "pending",
+      });
+
+      res.status(201).json(draft);
+    } catch (error) {
+      console.error("Draft save error:", error);
+      res.status(500).json({ error: "Failed to save draft" });
     }
   },
 );
