@@ -155,6 +155,20 @@ const FINALIZE_TOOL = {
         type: "string",
         description: "The final content, fully written and ready to post.",
       },
+      event: {
+        type: "object",
+        description:
+          "Structured event details mentioned anywhere in the conversation, so they can be reused to generate a matching flyer. Include this object whenever the content is about a specific event with a date, location, or similar — omit individual fields that were never mentioned. Omit the whole `event` object entirely for non-event content (a quote card, a general reflection, a recurring series with no single date).",
+        properties: {
+          title: { type: "string" },
+          subtitle: { type: "string" },
+          date: { type: "string" },
+          location: { type: "string" },
+          cost: { type: "string" },
+          cta: { type: "string" },
+          registration_url: { type: "string" },
+        },
+      },
     },
     required: ["caption"],
   },
@@ -165,14 +179,14 @@ const buildChatSystemPrompt = (profile, ministry, platform) =>
 
 CONVERSATIONAL MODE
 
-You are now in a back-and-forth conversation with a ministry team member who wants content created for ${platform}. You will often not have everything you need on the first message.
+You are now in a back-and-forth conversation with a ministry team member who wants content created for ${platform}. You will often not have everything you need on the first message. Some messages will describe a flyer that's already been made (sometimes as an extracted summary of an uploaded image) — treat those facts as already known and don't ask the user to repeat them.
 
 If you are missing information that would materially change what you write, ask exactly ONE short, specific question per turn. Do not ask more than one question at a time, and do not call the finalize_caption tool on a turn where you ask a question. Reasons to ask:
 - Which entity this belongs to (KTM or Salt & Light) is unclear from what's been shared.
 - The event is co-hosted, partnered, or otherwise doesn't cleanly belong to either entity — ask directly whether this is a partnered event and how it should be framed. A partnered event can still be written in the ministry's voice once you know who else is involved and what the entity boundary should be for this piece. Don't refuse to write it just because it doesn't fit neatly.
 - The audience, spiritual framing/series tie-in, cost, registration link, or location is needed for this platform and hasn't been given.
 
-Once you have enough to write complete, accurate content, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it.`;
+Once you have enough to write complete, accurate content, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it. Always include the \`event\` object in that call when the content is about a specific event, with whatever structured fields (title, date, location, cost, cta, registration_url) were mentioned, so a matching flyer can be generated from the same facts without asking the user to retype them.`;
 
 const chatTurn = async ({ profile, ministry, platform, messages }) => {
   const client = new Anthropic({
@@ -191,7 +205,11 @@ const chatTurn = async ({ profile, ministry, platform, messages }) => {
     (block) => block.type === "tool_use" && block.name === "finalize_caption",
   );
   if (toolUse) {
-    return { done: true, caption: toolUse.input.caption };
+    return {
+      done: true,
+      caption: toolUse.input.caption,
+      event: toolUse.input.event || null,
+    };
   }
 
   const textBlock = response.content.find((block) => block.type === "text");

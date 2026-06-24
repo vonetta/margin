@@ -16,6 +16,11 @@ jest.mock("../../services/generationService", () => ({
   chatTurn: (...args) => mockChatTurn(...args),
 }));
 
+const mockExtractFlyerDetails = jest.fn();
+jest.mock("../../services/imageService", () => ({
+  extractFlyerDetails: (...args) => mockExtractFlyerDetails(...args),
+}));
+
 const testMinistry = {
   ministry_id: "ktm-test",
   name: "Khy Traylor Global Ministries",
@@ -57,6 +62,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   mockChatTurn.mockReset();
+  mockExtractFlyerDetails.mockReset();
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await AiProfile.deleteMany({ ministry_id: "ktm-test" });
   await ContentDraft.deleteMany({ ministry_id: "ktm-test" });
@@ -313,6 +319,29 @@ describe("POST /api/content/chat", () => {
     expect(res.body.messages).toHaveLength(4);
   });
 
+  it("passes through structured event details when the model includes them", async () => {
+    mockChatTurn.mockResolvedValue({
+      done: true,
+      caption: "Final caption text",
+      event: { title: "Worship Workshop", date: "July 20" },
+    });
+
+    const res = await request(app)
+      .post("/api/content/chat")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        messages: [{ role: "user", content: "Worship Workshop July 20" }],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.event).toEqual({
+      title: "Worship Workshop",
+      date: "July 20",
+    });
+  });
+
   it("rejects a message history that doesn't end with the user", async () => {
     const res = await request(app)
       .post("/api/content/chat")
@@ -378,5 +407,75 @@ describe("POST /api/content/drafts", () => {
       .send({ platform: "Instagram", prompt: "We have an event next week" });
 
     expect(res.status).toBe(400);
+  });
+
+  it("saves an optional image_url alongside the caption", async () => {
+    const res = await request(app)
+      .post("/api/content/drafts")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platform: "Instagram",
+        caption: "Final caption text",
+        prompt: "We have an event next week",
+        image_url: "https://pub-test.r2.dev/ktm-test/flyers/f1.png",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.image_url).toBe(
+      "https://pub-test.r2.dev/ktm-test/flyers/f1.png",
+    );
+  });
+});
+
+describe("POST /api/content/extract-flyer", () => {
+  it("returns extracted flyer details", async () => {
+    mockExtractFlyerDetails.mockResolvedValue({
+      title: "Worship Workshop",
+      subtitle: null,
+      date: "July 20",
+      location: null,
+      cost: "$100",
+      cta: "Secure your spot",
+      registration_url: null,
+      other_details: null,
+    });
+
+    const res = await request(app)
+      .post("/api/content/extract-flyer")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .attach("flyer", Buffer.from("fake-image-bytes"), {
+        filename: "flyer.jpg",
+        contentType: "image/jpeg",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.title).toBe("Worship Workshop");
+    expect(res.body.date).toBe("July 20");
+  });
+
+  it("rejects when no file is uploaded", async () => {
+    const res = await request(app)
+      .post("/api/content/extract-flyer")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 500 when extraction fails", async () => {
+    mockExtractFlyerDetails.mockRejectedValue(new Error("Gemini error"));
+
+    const res = await request(app)
+      .post("/api/content/extract-flyer")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .attach("flyer", Buffer.from("fake-image-bytes"), {
+        filename: "flyer.jpg",
+        contentType: "image/jpeg",
+      });
+
+    expect(res.status).toBe(500);
   });
 });

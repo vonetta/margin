@@ -79,7 +79,11 @@ describe("chatTurn", () => {
       ],
     });
 
-    expect(result).toEqual({ done: true, caption: "Final caption text" });
+    expect(result).toEqual({
+      done: true,
+      caption: "Final caption text",
+      event: null,
+    });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: expect.arrayContaining([
@@ -87,5 +91,33 @@ describe("chatTurn", () => {
         ]),
       }),
     );
+  });
+
+  it("includes structured event details when the model provides them", async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        {
+          type: "tool_use",
+          name: "finalize_caption",
+          input: {
+            caption: "Final caption text",
+            event: { title: "Worship Workshop", date: "July 20" },
+          },
+        },
+      ],
+    });
+
+    const result = await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "Worship Workshop July 20" }],
+    });
+
+    expect(result).toEqual({
+      done: true,
+      caption: "Final caption text",
+      event: { title: "Worship Workshop", date: "July 20" },
+    });
   });
 });

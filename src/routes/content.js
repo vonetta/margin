@@ -1,10 +1,25 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
 const { body, validationResult } = require("express-validator");
 const { generateContent, chatTurn } = require("../services/generationService");
+const { extractFlyerDetails } = require("../services/imageService");
 const AiProfile = require("../models/AiProfile");
 const ContentDraft = require("../models/ContentDraft");
 const { requireRole } = require("../middleware/auth");
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
+    }
+  },
+});
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -122,12 +137,38 @@ router.post(
       res.json({
         done: result.done,
         caption: result.done ? result.caption : undefined,
+        event: result.done ? result.event : undefined,
         message: result.done ? undefined : result.message,
         messages: [...messages, { role: "assistant", content: replyContent }],
       });
     } catch (error) {
       console.error("Chat generation error:", error);
       res.status(500).json({ error: "Content generation failed" });
+    }
+  },
+);
+
+// POST /api/content/extract-flyer — read an already-made flyer image and
+// pull out its event details, so the chat doesn't ask the user to retype
+// facts that are already on the flyer.
+router.post(
+  "/extract-flyer",
+  upload.single("flyer"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No image file provided" });
+      }
+
+      const details = await extractFlyerDetails(
+        req.file.buffer,
+        req.file.mimetype,
+      );
+
+      res.json(details);
+    } catch (error) {
+      console.error("Flyer extraction error:", error);
+      res.status(500).json({ error: "Failed to read details from the flyer" });
     }
   },
 );
@@ -144,17 +185,19 @@ router.post(
       .withMessage(`Platform must be one of: ${VALID_PLATFORMS.join(", ")}`),
     body("caption").trim().notEmpty().withMessage("Caption is required"),
     body("prompt").trim().notEmpty().withMessage("Prompt is required"),
+    body("image_url").optional().trim().isURL(),
   ],
   validate,
   async (req, res) => {
     try {
-      const { platform, caption, prompt } = req.body;
+      const { platform, caption, prompt, image_url } = req.body;
 
       const draft = await ContentDraft.create({
         ministry_id: req.ministryId,
         prompt,
         platform,
         caption,
+        image_url,
         generated_by: req.userId,
         status: "pending",
       });

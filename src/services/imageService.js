@@ -9,6 +9,7 @@ const getClient = () => {
 };
 
 const MODEL_ID = "gemini-2.5-flash-image";
+const VISION_TEXT_MODEL_ID = "gemini-2.5-flash";
 
 // Generate a flyer background from a text prompt.
 // Returns a PNG buffer.
@@ -74,4 +75,55 @@ const removeBackground = async (imageBuffer, mimeType = "image/jpeg") => {
   return Buffer.from(imagePart.inlineData.data, "base64");
 };
 
-module.exports = { generateBackground, removeBackground, MODEL_ID };
+// Read an already-made flyer image and extract its event details as JSON,
+// so a caption can be written without asking the user to retype facts
+// that are already on the flyer.
+const extractFlyerDetails = async (imageBuffer, mimeType = "image/jpeg") => {
+  if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
+    throw new Error("An image buffer is required");
+  }
+
+  const model = getClient().getGenerativeModel({ model: VISION_TEXT_MODEL_ID });
+
+  const result = await model.generateContent({
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `Read this event flyer image and extract its details. Respond with raw JSON only, no markdown fences, no commentary, using exactly this shape — use null for anything not visible on the flyer:
+{"title": string|null, "subtitle": string|null, "date": string|null, "location": string|null, "cost": string|null, "cta": string|null, "registration_url": string|null, "other_details": string|null}
+"other_details" should capture anything else relevant (host, speakers, theme, series) that doesn't fit the other fields.`,
+          },
+          { inlineData: { mimeType, data: imageBuffer.toString("base64") } },
+        ],
+      },
+    ],
+  });
+
+  const textPart = result.response.candidates?.[0]?.content?.parts?.find(
+    (p) => p.text,
+  );
+  if (!textPart) {
+    throw new Error("No text returned from Gemini");
+  }
+
+  const cleaned = textPart.text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "");
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    throw new Error("Could not parse flyer details from the model's response");
+  }
+};
+
+module.exports = {
+  generateBackground,
+  removeBackground,
+  extractFlyerDetails,
+  MODEL_ID,
+};
