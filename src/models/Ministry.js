@@ -27,9 +27,14 @@ const ministrySchema = new mongoose.Schema({
       text_overlay_opacity: { type: Number },
       image_only_opacity: { type: Number }
     },
-    logo_url: { type: String }
+    logo_url: { type: String },
+    logo_key: { type: String }
   },
   plan: { type: String, enum: ['small', 'mid', 'enterprise'], default: 'small' },
+  // Usable immediately on creation (sensible-but-empty defaults) — this
+  // just tracks whether the admin has been through the onboarding wizard
+  // (branding + voice + hashtags) so the UI can nudge them to finish it.
+  onboarding_complete: { type: Boolean, default: false },
   created_at: { type: Date, default: Date.now }
 });
 

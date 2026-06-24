@@ -1,3 +1,10 @@
+const mockUploadFile = jest.fn();
+const mockSafeDeleteFile = jest.fn();
+jest.mock("../../services/storageService", () => ({
+  uploadFile: (...args) => mockUploadFile(...args),
+  safeDeleteFile: (...args) => mockSafeDeleteFile(...args),
+}));
+
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
@@ -42,6 +49,12 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  mockUploadFile.mockReset();
+  mockSafeDeleteFile.mockReset();
+  mockUploadFile.mockResolvedValue({
+    key: "ktm-test/logos/logo-abc123.png",
+    url: "https://pub-test.r2.dev/ktm-test/logos/logo-abc123.png",
+  });
   await Ministry.deleteMany({
     ministry_id: { $in: ["ktm-test", "salt-light-test"] },
   });
@@ -256,5 +269,123 @@ describe("GET /api/ministry/sub-ministries", () => {
       .set("Authorization", `Bearer ${teamToken}`);
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/ministry/logo", () => {
+  it("uploads a logo and sets branding.logo_url", async () => {
+    const res = await request(app)
+      .post("/api/ministry/logo")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .attach("logo", Buffer.from("fake-logo-bytes"), {
+        filename: "logo.png",
+        contentType: "image/png",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.branding.logo_url).toContain("r2.dev");
+    expect(mockSafeDeleteFile).not.toHaveBeenCalled();
+  });
+
+  it("cleans up the old logo when replacing it", async () => {
+    await Ministry.findOneAndUpdate(
+      { ministry_id: "ktm-test" },
+      {
+        $set: {
+          "branding.logo_url": "https://pub-test.r2.dev/old-logo.png",
+          "branding.logo_key": "ktm-test/logos/old-logo.png",
+        },
+      },
+    );
+
+    await request(app)
+      .post("/api/ministry/logo")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .attach("logo", Buffer.from("fake-logo-bytes"), {
+        filename: "logo.png",
+        contentType: "image/png",
+      });
+
+    expect(mockSafeDeleteFile).toHaveBeenCalledWith(
+      "ktm-test/logos/old-logo.png",
+    );
+  });
+
+  it("rejects upload with no file", async () => {
+    const res = await request(app)
+      .post("/api/ministry/logo")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects upload by a team member", async () => {
+    const res = await request(app)
+      .post("/api/ministry/logo")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .attach("logo", Buffer.from("fake-logo-bytes"), {
+        filename: "logo.png",
+        contentType: "image/png",
+      });
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("PUT /api/ministry branding merge", () => {
+  it("preserves the logo when updating colors", async () => {
+    await Ministry.findOneAndUpdate(
+      { ministry_id: "ktm-test" },
+      {
+        $set: {
+          "branding.logo_url": "https://pub-test.r2.dev/logo.png",
+          "branding.logo_key": "ktm-test/logos/logo.png",
+        },
+      },
+    );
+
+    const res = await request(app)
+      .put("/api/ministry")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ branding: { colors: { primary: "#112233" } } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.branding.logo_url).toBe(
+      "https://pub-test.r2.dev/logo.png",
+    );
+    expect(res.body.branding.colors.primary).toBe("#112233");
+  });
+
+  it("preserves sibling color keys when updating one color", async () => {
+    await Ministry.findOneAndUpdate(
+      { ministry_id: "ktm-test" },
+      { $set: { "branding.colors.accent": "#EA8A8B" } },
+    );
+
+    const res = await request(app)
+      .put("/api/ministry")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ branding: { colors: { primary: "#112233" } } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.branding.colors.accent).toBe("#EA8A8B");
+    expect(res.body.branding.colors.primary).toBe("#112233");
+  });
+
+  it("sets onboarding_complete", async () => {
+    const res = await request(app)
+      .put("/api/ministry")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ onboarding_complete: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.onboarding_complete).toBe(true);
   });
 });

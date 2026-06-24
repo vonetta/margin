@@ -1,10 +1,25 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
 const { body, validationResult } = require("express-validator");
 const Ministry = require("../models/Ministry");
 const AiProfile = require("../models/AiProfile");
 const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
+const { uploadFile, safeDeleteFile } = require("../services/storageService");
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
+    }
+  },
+});
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -51,6 +66,7 @@ router.put(
       .withMessage("Primary color must be a valid hex code"),
     body("branding.fonts.heading").optional().trim(),
     body("branding.fonts.body").optional().trim(),
+    body("onboarding_complete").optional().isBoolean(),
   ],
   validate,
   async (req, res) => {
@@ -62,6 +78,7 @@ router.put(
         "entity_boundary",
         "branding",
         "plan",
+        "onboarding_complete",
       ];
 
       const updates = Object.keys(req.body)
@@ -71,15 +88,79 @@ router.put(
           return obj;
         }, {});
 
-        const ministry = await Ministry.findOneAndUpdate(
-            { ministry_id: req.ministryId },
-            { $set: updates },
-            { returnDocument: 'after', runValidators: true }
-          );
+      // branding is a single nested field, so a wholesale $set would wipe
+      // out logo_url/logo_key (managed by its own upload endpoint) and any
+      // sibling color/font keys the caller didn't send. Merge instead.
+      if (updates.branding) {
+        const current = await Ministry.findOne({
+          ministry_id: req.ministryId,
+        });
+        const currentBranding = current?.branding || {};
+        updates.branding = {
+          colors: { ...currentBranding.colors, ...updates.branding.colors },
+          fonts: { ...currentBranding.fonts, ...updates.branding.fonts },
+          image_treatment: {
+            ...currentBranding.image_treatment,
+            ...updates.branding.image_treatment,
+          },
+          logo_url: currentBranding.logo_url,
+          logo_key: currentBranding.logo_key,
+        };
+      }
+
+      const ministry = await Ministry.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        { $set: updates },
+        { returnDocument: "after", runValidators: true },
+      );
 
       res.json(ministry);
     } catch (error) {
       res.status(500).json({ error: "Failed to update ministry" });
+    }
+  },
+);
+
+// POST /api/ministry/logo
+// Upload (or replace) the current ministry's logo
+router.post(
+  "/logo",
+  requireRole("admin", "leader"),
+  upload.single("logo"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No image file provided" });
+      }
+
+      const current = await Ministry.findOne({ ministry_id: req.ministryId });
+      if (current?.branding?.logo_key) {
+        await safeDeleteFile(current.branding.logo_key);
+      }
+
+      const { key, url } = await uploadFile({
+        ministryId: req.ministryId,
+        category: "logos",
+        buffer: req.file.buffer,
+        contentType: req.file.mimetype,
+        originalName: "logo",
+      });
+
+      const ministry = await Ministry.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        {
+          $set: {
+            "branding.logo_url": url,
+            "branding.logo_key": key,
+          },
+        },
+        { returnDocument: "after" },
+      );
+
+      res.json(ministry);
+    } catch (error) {
+      console.error("Logo upload error:", error);
+      res.status(500).json({ error: "Failed to upload logo" });
     }
   },
 );

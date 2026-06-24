@@ -92,6 +92,73 @@ router.put(
   },
 );
 
+// PUT /api/profile/hashtags
+router.put(
+  "/hashtags",
+  requireRole("admin", "leader"),
+  [
+    body("brand").optional().isArray().withMessage("Brand must be an array"),
+    body("brand.*").optional().trim().notEmpty(),
+    body("content")
+      .optional()
+      .isArray()
+      .withMessage("Content must be an array"),
+    body("content.*").optional().trim().notEmpty(),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const allowed = ["brand", "content"];
+      const updates = Object.keys(req.body)
+        .filter((key) => allowed.includes(key))
+        .reduce((obj, key) => {
+          obj[`hashtags.${key}`] = req.body[key];
+          return obj;
+        }, {});
+
+      const profile = await AiProfile.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        { $set: updates },
+        { returnDocument: "after", runValidators: true },
+      );
+
+      if (!profile) {
+        return res.status(404).json({ error: "AI profile not found" });
+      }
+
+      res.json(profile.hashtags);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update hashtags" });
+    }
+  },
+);
+
+// PUT /api/profile/ctas
+// Body: { ctas: { key: value, ... } } — replaces the whole CTA map
+router.put(
+  "/ctas",
+  requireRole("admin", "leader"),
+  [body("ctas").isObject().withMessage("ctas must be an object")],
+  validate,
+  async (req, res) => {
+    try {
+      const profile = await AiProfile.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        { $set: { ctas: req.body.ctas } },
+        { returnDocument: "after", runValidators: true },
+      );
+
+      if (!profile) {
+        return res.status(404).json({ error: "AI profile not found" });
+      }
+
+      res.json(profile.ctas);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update CTAs" });
+    }
+  },
+);
+
 // POST /api/profile/phrases
 // Add a sample phrase
 router.post(

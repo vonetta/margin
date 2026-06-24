@@ -115,6 +115,53 @@ describe("PUT /api/profile/voice", () => {
   });
 });
 
+describe("PUT /api/profile/hashtags", () => {
+  it("updates brand and content hashtags", async () => {
+    const res = await request(app)
+      .put("/api/profile/hashtags")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ brand: ["#SaltAndLight"], content: ["#Community"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.brand).toEqual(["#SaltAndLight"]);
+    expect(res.body.content).toEqual(["#Community"]);
+  });
+
+  it("rejects a non-array brand value", async () => {
+    const res = await request(app)
+      .put("/api/profile/hashtags")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ brand: "#NotAnArray" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("PUT /api/profile/ctas", () => {
+  it("replaces the CTA map", async () => {
+    const res = await request(app)
+      .put("/api/profile/ctas")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ctas: { enrollment: "Join us today" } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.enrollment).toBe("Join us today");
+  });
+
+  it("rejects a non-object ctas value", async () => {
+    const res = await request(app)
+      .put("/api/profile/ctas")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ctas: "not an object" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /api/profile/phrases", () => {
   it("adds a new sample phrase", async () => {
     const res = await request(app)
