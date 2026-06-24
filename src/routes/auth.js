@@ -51,6 +51,16 @@ router.post(
         return res.status(404).json({ error: "Ministry not found" });
       }
 
+      // Self-service registration has no invite flow yet, so anyone who
+      // knows a ministry_id can join it — but only the very first member
+      // may grant themselves elevated access. Everyone after that is
+      // added as "team" regardless of what they request; an existing
+      // admin/leader must promote them via PUT /api/people or similar.
+      const existingMemberCount = await User.countDocuments({
+        "ministries.ministry_id": ministry_id,
+      });
+      const assignedRole = existingMemberCount === 0 ? role || "admin" : "team";
+
       const hashedPassword = await bcrypt.hash(password, 12);
 
       let user = await User.findOne({ email });
@@ -62,14 +72,14 @@ router.post(
             .status(400)
             .json({ error: "Already a member of this ministry" });
         }
-        user.ministries.push({ ministry_id, role: role || "team" });
+        user.ministries.push({ ministry_id, role: assignedRole });
         await user.save();
       } else {
         user = await User.create({
           email,
           password: hashedPassword,
           name,
-          ministries: [{ ministry_id, role: role || "team" }],
+          ministries: [{ ministry_id, role: assignedRole }],
         });
       }
 

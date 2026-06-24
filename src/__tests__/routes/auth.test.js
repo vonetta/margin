@@ -33,7 +33,7 @@ afterAll(async () => {
   await Ministry.deleteMany({
     ministry_id: { $in: ["ktm-test", "second-test"] },
   });
-  await mongoose.connection.close();
+  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {

@@ -1,5 +1,14 @@
 const Anthropic = require("@anthropic-ai/sdk");
 
+// AiProfile stores ctas/registers as Mongoose Maps. Object.entries() on a
+// real Mongoose Map returns its internal bookkeeping properties, not the
+// actual data, so iterate via .entries() for Maps and fall back to
+// Object.entries() for plain objects (e.g. in tests).
+const mapEntries = (value) =>
+  value instanceof Map
+    ? Array.from(value.entries())
+    : Object.entries(value || {});
+
 const buildSystemPrompt = (profile, ministry) => {
   const voiceProfile = profile.voice_profile;
 
@@ -11,7 +20,7 @@ const buildSystemPrompt = (profile, ministry) => {
   const brandHashtags = profile.hashtags.brand.join(" ");
   const contentHashtags = profile.hashtags.content.join(" ");
 
-  const ctas = Object.entries(profile.ctas || {})
+  const ctas = mapEntries(profile.ctas)
     .map(([key, value]) => `${key}: ${value}`)
     .join("\n");
 
@@ -25,11 +34,9 @@ const buildSystemPrompt = (profile, ministry) => {
     .map((r) => `${r.title}: ${r.content}`)
     .join("\n\n");
 
-  const registers = voiceProfile.registers
-    ? Object.entries(voiceProfile.registers)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join("\n")
-    : "";
+  const registers = mapEntries(voiceProfile.registers)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
 
   return `You are the official content generation assistant for ${ministry.name}. Your sole purpose is to generate captions, announcements, and social media content that sounds exactly like ${voiceProfile.persona_name} and no one else.
 

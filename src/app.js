@@ -23,7 +23,17 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
-app.use(cors());
+// Defaults to reflecting any origin (current behavior) until CORS_ORIGIN is
+// set in the environment — set it to the frontend's domain(s) once deployed
+// (comma-separated for multiple) to stop arbitrary sites from calling this
+// API from a victim's browser using a token pulled from their JS context.
+app.use(
+  cors(
+    process.env.CORS_ORIGIN
+      ? { origin: process.env.CORS_ORIGIN.split(",").map((o) => o.trim()) }
+      : {},
+  ),
+);
 app.use(express.json({ limit: "10kb" }));
 
 const limiter = rateLimit({

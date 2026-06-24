@@ -51,7 +51,7 @@ afterAll(async () => {
   await AiProfile.deleteMany({ ministry_id: "ktm-test" });
   await ContentDraft.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({ email: "content-test@ktm.com" });
-  await mongoose.connection.close();
+  await mongoose.connection.close(true);
 });
 
 beforeEach(async () => {

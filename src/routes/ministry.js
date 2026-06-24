@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const Ministry = require("../models/Ministry");
+const { requireRole } = require("../middleware/auth");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -25,6 +26,7 @@ router.get("/", async (req, res) => {
 // Update current ministry profile
 router.put(
   "/",
+  requireRole("admin", "leader"),
   [
     body("name")
       .optional()

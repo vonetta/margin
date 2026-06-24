@@ -8,11 +8,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await mongoose.connection.close();
+  await mongoose.connection.close(true);
 });
 
 afterEach(async () => {
-  await Ministry.deleteMany({});
+  await Ministry.deleteMany({ ministry_id: "ktm-tenant-test" });
 });
 
 describe("Tenant middleware", () => {
@@ -32,11 +32,13 @@ describe("Tenant middleware", () => {
 
   it("passes through when a valid ministry ID is provided", async () => {
     await Ministry.create({
-      ministry_id: "ktm",
+      ministry_id: "ktm-tenant-test",
       name: "Khy Traylor Global Ministries",
     });
 
-    const res = await request(app).get("/api/test").set("x-ministry-id", "ktm");
+    const res = await request(app)
+      .get("/api/test")
+      .set("x-ministry-id", "ktm-tenant-test");
 
     expect(res.status).not.toBe(400);
     expect(res.status).not.toBe(404);

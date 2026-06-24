@@ -4,6 +4,7 @@ const { body, validationResult } = require("express-validator");
 const { generateContent } = require("../services/generationService");
 const AiProfile = require("../models/AiProfile");
 const ContentDraft = require("../models/ContentDraft");
+const { requireRole } = require("../middleware/auth");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -52,7 +53,7 @@ router.post(
         prompt,
         platform,
         caption: generatedCaption,
-        generated_by: req.headers["x-user-id"] || "team",
+        generated_by: req.userId,
         status: "pending",
       });
 
@@ -108,14 +109,14 @@ router.get("/drafts/:id", async (req, res) => {
 });
 
 // PUT /api/content/drafts/:id/approve
-router.put("/drafts/:id/approve", async (req, res) => {
+router.put("/drafts/:id/approve", requireRole("admin", "leader"), async (req, res) => {
   try {
     const draft = await ContentDraft.findOneAndUpdate(
       { _id: req.params.id, ministry_id: req.ministryId },
       {
         status: "approved",
         approved_at: new Date(),
-        approved_by: req.headers["x-user-id"] || "ap-khy",
+        approved_by: req.userId,
       },
       { returnDocument: "after" },
     );
@@ -131,7 +132,7 @@ router.put("/drafts/:id/approve", async (req, res) => {
 });
 
 // PUT /api/content/drafts/:id/reject
-router.put("/drafts/:id/reject", async (req, res) => {
+router.put("/drafts/:id/reject", requireRole("admin", "leader"), async (req, res) => {
   try {
     const draft = await ContentDraft.findOneAndUpdate(
       { _id: req.params.id, ministry_id: req.ministryId },
@@ -152,6 +153,7 @@ router.put("/drafts/:id/reject", async (req, res) => {
 // PUT /api/content/drafts/:id/feedback
 router.put(
   "/drafts/:id/feedback",
+  requireRole("admin", "leader"),
   [body("feedback").trim().notEmpty().withMessage("Feedback is required")],
   validate,
   async (req, res) => {
