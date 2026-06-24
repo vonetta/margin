@@ -56,14 +56,15 @@ describe("selectBackground", () => {
     expect(result.url).toBe("https://existing.r2.dev/bg.png");
   });
 
-  it("generates a new background when the library is empty", async () => {
+  it("returns no url when the library is empty, instead of auto-generating", async () => {
     const result = await selectBackground({
       ministryId: "ktm-test",
       layout: "showcase",
       tone: "formal",
     });
-    expect(result.generated).toBe(true);
-    expect(result.url).toContain("r2.dev");
+    expect(result.generated).toBe(false);
+    expect(result.url).toBeNull();
+    expect(result.id).toBeNull();
   });
 
   it("falls back to any background when no tone match exists", async () => {

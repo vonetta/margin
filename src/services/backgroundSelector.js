@@ -45,26 +45,14 @@ const selectBackground = async ({ ministryId, layout, tone }) => {
     return { url: background.url, id: background._id, generated: false };
   }
 
-  // 2. Nothing in the library — generate one
-  const ministry = await Ministry.findOne({ ministry_id: ministryId });
-  const prompt = buildPrompt(ministry, layout, tone);
-  const png = await generateBackground(prompt, { aspectRatio: "4:5" });
-  const { key, url } = await uploadFile({
-    ministryId,
-    category: "backgrounds",
-    buffer: png,
-    contentType: "image/png",
-    originalName: "auto-bg",
-  });
-  const created = await Background.create({
-    ministry_id: ministryId,
-    prompt,
-    url,
-    key,
-    tone,
-  });
-
-  return { url, id: created._id, generated: true };
+  // 2. Nothing in the library — don't auto-generate abstract AI art by
+  // default anymore. Every layout has its own brand-color gradient as a
+  // fallback when there's no backgroundUrl, which is the new default
+  // look (solid/gradient color blocks, matching real reference flyers
+  // instead of generic painterly swirls). AI-generated backgrounds are
+  // still available, just via the explicit POST /api/backgrounds/generate
+  // action, not automatically here.
+  return { url: null, id: null, generated: false };
 };
 
 module.exports = { selectBackground, buildPrompt };

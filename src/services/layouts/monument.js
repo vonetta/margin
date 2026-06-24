@@ -4,6 +4,10 @@ const {
   DIMENSIONS,
   resolveColors,
   resolveFonts,
+  brandGradient,
+  renderPill,
+  renderRibbon,
+  renderLogo,
 } = require("./shared");
 
 const meta = {
@@ -46,13 +50,14 @@ const render = ({
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
 
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
+  const logo = renderLogo(branding.logo_url);
 
   const hostImg = host && (host.cutout_url || host.headshot_url);
   const heroBlock = hostImg
     ? `<div class="hero">
          <div class="hero-photo" style="background-image:url('${host.cutout_url || host.headshot_url}')"></div>
+         ${renderRibbon("HOST", gold, primary)}
          <div class="hero-tag">
-           ${host.role ? `<div class="hero-role">${escapeHtml(host.role)}</div>` : ""}
            <div class="hero-name">${escapeHtml(host.name || "")}</div>
            ${host.title ? `<div class="hero-title">${escapeHtml(host.title)}</div>` : ""}
          </div>
@@ -66,23 +71,21 @@ const render = ({
         ? `<div class="sp-photo" style="background-image:url('${img}')"></div>`
         : `<div class="sp-photo sp-empty">${escapeHtml((s.name || "?").charAt(0))}</div>`;
       return `<div class="sp-card">${photo}
+        ${renderRibbon("SPEAKER", hexToRgba(gold, 0.92), primary)}
         ${s.title ? `<div class="sp-pre">${escapeHtml(s.title)}</div>` : ""}
         <div class="sp-name">${escapeHtml(s.name || "")}</div></div>`;
     })
     .join("");
 
   const speakerBlock = speakers.length
-    ? `<div class="slabel">Featuring</div>
+    ? `<div class="slabel">Featuring Guest Speakers</div>
        <div class="speakers" style="grid-template-columns: repeat(${speakerColumns(speakers.length)}, 1fr)">${speakerCards}</div>`
     : "";
 
-  const detailItems = [
-    dateLine &&
-      `<div class="detail"><span class="dlabel">When</span><span class="dval">${dateLine}</span></div>`,
-    location &&
-      `<div class="detail"><span class="dlabel">Where</span><span class="dval">${location}</span></div>`,
-    cost &&
-      `<div class="detail"><span class="dlabel">Cost</span><span class="dval">${cost}</span></div>`,
+  const pills = [
+    renderPill({ label: "When", value: dateLine, accent: gold }),
+    renderPill({ label: "Where", value: location, accent: gold }),
+    renderPill({ label: "Cost", value: cost, accent: gold }),
   ]
     .filter(Boolean)
     .join("");
@@ -91,49 +94,53 @@ const render = ({
     ? `<div class="qr-slot"><img src="${qrDataUrl}" class="qr-img" alt="QR" /><div class="qr-caption">${qrCaption}</div></div>`
     : "";
 
-  // Background: AI image if provided, else navy gradient
+  // Background: real photo if provided, else a bold brand-color gradient
+  // (the new default — see shared.js for why abstract AI art was dropped).
   const bgStyle = backgroundUrl
     ? `background-image: linear-gradient(${hexToRgba(primary, 0.55)}, ${hexToRgba(primary, 0.75)}), url('${backgroundUrl}'); background-size: cover; background-position: center;`
-    : `background: linear-gradient(160deg, ${primary} 0%, ${hexToRgba(primary, 0.9)} 100%);`;
+    : `background: ${brandGradient({ primary, accent, gold })};`;
 
   const styles = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: ${dims.width}px; height: ${dims.height}px; }
-    body { font-family: '${body}', sans-serif; overflow: hidden; ${bgStyle} }
-    .wrap { width: 100%; height: 100%; display: flex; flex-direction: column; padding: 80px 70px 0; }
+    body { font-family: '${body}', sans-serif; overflow: hidden; display: flex; flex-direction: column; ${bgStyle} }
+    .wrap { width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 56px 70px 0; }
+    .top-bar { display: flex; align-items: center; margin-bottom: 28px; }
+    .logo { display: block; }
     .header { display: flex; gap: 40px; align-items: flex-start; }
     .header-text { flex: 1; }
-    .title { font-family: '${display}', serif; font-weight: 600; font-size: ${hostImg ? "64px" : "82px"}; line-height: 1.02; color: #fff; text-shadow: 0 2px 24px rgba(0,0,0,0.4); }
-    .subtitle { font-size: 27px; line-height: 1.4; color: ${gold}; margin-top: 20px; font-style: italic; max-width: 520px; }
+    .title { font-family: '${display}', serif; font-weight: 700; font-size: ${hostImg ? "66px" : "84px"}; line-height: 1.0; color: #fff; text-shadow: 0 4px 30px rgba(0,0,0,0.55); }
+    .subtitle { font-size: 27px; line-height: 1.4; color: ${gold}; margin-top: 18px; font-style: italic; max-width: 520px; text-shadow: 0 2px 12px rgba(0,0,0,0.4); }
     .hero { width: 300px; flex-shrink: 0; text-align: center; }
-    .hero-photo { width: 280px; height: 340px; background-size: cover; background-position: center top; margin: 0 auto; }
-    .hero-tag { margin-top: 12px; }
-    .hero-role { font-size: 18px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: ${gold}; }
-    .hero-name { font-family: '${display}', serif; font-size: 34px; font-weight: 700; color: #fff; margin-top: 2px; }
-    .hero-title { font-size: 19px; color: ${hexToRgba(gold, 0.9)}; margin-top: 2px; }
-    .body-zone { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 36px; }
-    .slabel { text-align: center; font-size: 20px; letter-spacing: 0.18em; text-transform: uppercase; color: ${gold}; font-weight: 600; }
-    .speakers { display: grid; gap: 26px; }
+    .hero-photo { width: 280px; height: 340px; border-radius: 14px; background-size: cover; background-position: center top; margin: 0 auto; box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+    .ribbon { display: inline-block; margin-top: 12px; padding: 5px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .hero-tag { margin-top: 8px; }
+    .hero-name { font-family: '${display}', serif; font-size: 32px; font-weight: 700; color: #fff; margin-top: 4px; }
+    .hero-title { font-size: 18px; color: rgba(255,255,255,0.85); margin-top: 2px; }
+    .body-zone { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 32px; }
+    .slabel { text-align: center; font-size: 19px; letter-spacing: 0.14em; text-transform: uppercase; color: ${gold}; font-weight: 700; }
+    .speakers { display: grid; gap: 24px; margin-top: 14px; }
     .sp-card { text-align: center; }
-    .sp-photo { width: 100%; aspect-ratio: 0.85; border-radius: 10px; background-size: cover; background-position: center top; border: 3px solid ${gold}; }
-    .sp-empty { display: flex; align-items: center; justify-content: center; background: ${hexToRgba(gold, 0.2)}; color: #fff; font-size: 56px; font-family: '${display}', serif; }
-    .sp-pre { font-family: '${accentFont}', cursive; font-size: 26px; color: ${gold}; margin-top: 10px; line-height: 0.9; }
-    .sp-name { font-family: '${display}', serif; font-size: 26px; font-weight: 600; color: #fff; }
-    .details { display: flex; flex-direction: column; gap: 16px; }
-    .detail { display: flex; align-items: baseline; gap: 16px; }
-    .dlabel { font-family: '${display}', serif; color: ${gold}; font-size: 22px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; min-width: 110px; }
-    .dval { font-size: 32px; color: #fff; font-weight: 500; }
-    .footer { background: ${hexToRgba(primary, 0.85)}; margin: 0 -70px; padding: 40px 70px 56px; display: flex; justify-content: space-between; align-items: center; gap: 30px; }
-    .cta { font-family: '${accentFont}', cursive; font-size: 50px; color: ${gold}; }
+    .sp-photo { width: 100%; aspect-ratio: 0.85; border-radius: 12px; background-size: cover; background-position: center top; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
+    .sp-empty { display: flex; align-items: center; justify-content: center; background: ${hexToRgba(gold, 0.25)}; color: #fff; font-size: 56px; font-family: '${display}', serif; }
+    .sp-pre { font-family: '${accentFont}', cursive; font-size: 24px; color: ${gold}; margin-top: 8px; line-height: 0.9; }
+    .sp-name { font-family: '${display}', serif; font-size: 25px; font-weight: 700; color: #fff; }
+    .pills { display: flex; flex-direction: column; gap: 14px; }
+    .pill { border: 2px solid; border-radius: 12px; padding: 12px 20px; }
+    .pill-label { font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .pill-value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+    .footer { background: ${primary}; margin: 0 -70px; padding: 36px 70px 52px; display: flex; justify-content: space-between; align-items: center; gap: 30px; border-top: 4px solid ${gold}; }
+    .cta { font-family: '${display}', serif; font-size: 38px; font-weight: 700; color: ${gold}; text-transform: uppercase; letter-spacing: 0.02em; }
     .qr-slot { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .qr-img { width: 150px; height: 150px; background: #fff; padding: 10px; border-radius: 8px; }
-    .qr-caption { font-size: 18px; color: rgba(255,255,255,0.85); font-weight: 500; }
+    .qr-img { width: 140px; height: 140px; background: #fff; padding: 9px; border-radius: 10px; }
+    .qr-caption { font-size: 16px; color: rgba(255,255,255,0.85); font-weight: 500; }
   `;
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">${fontLink}<style>${styles}</style></head>
 <body>
   <div class="wrap">
+    ${logo ? `<div class="top-bar">${logo}</div>` : ""}
     <div class="header">
       <div class="header-text">
         <div class="title">${title}</div>
@@ -143,7 +150,7 @@ const render = ({
     </div>
     <div class="body-zone">
       ${speakerBlock}
-      <div class="details">${detailItems}</div>
+      <div class="pills">${pills}</div>
     </div>
   </div>
   <div class="footer">
