@@ -102,6 +102,31 @@ describe("suggestLayout", () => {
     expect(html).toContain("Leaders and prophetic voices");
   });
 
+  it("renders highlights when provided", () => {
+    const html = renderLayout("monument", {
+      content: {
+        title: "Test Event",
+        highlights: ["Hands-on prophetic activation", "Time for personal ministry"],
+      },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+    });
+    expect(html).toContain("Hands-on prophetic activation");
+    expect(html).toContain("Time for personal ministry");
+  });
+
+  it("respects a style object's visibility/size overrides", () => {
+    const html = renderLayout("monument", {
+      content: {
+        title: "Test Event",
+        description: "Should be hidden.",
+      },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+      style: { description_visible: false, title_size: 55 },
+    });
+    expect(html).not.toContain("Should be hidden.");
+    expect(html).toContain("font-size: 55px");
+  });
+
   it("lists all four layouts", () => {
     const layouts = listLayouts();
     expect(layouts.length).toBe(4);

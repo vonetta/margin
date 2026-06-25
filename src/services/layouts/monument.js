@@ -39,6 +39,7 @@ const render = ({
   const subtitle = escapeHtml(content.subtitle || "");
   const description = escapeHtml(content.description || "");
   const themeTags = Array.isArray(content.theme_tags) ? content.theme_tags : [];
+  const highlights = Array.isArray(content.highlights) ? content.highlights : [];
   const audience = escapeHtml(content.audience || "");
   const dateLine = escapeHtml(content.date || "");
   const location = escapeHtml(content.location || "");
@@ -105,6 +106,15 @@ const render = ({
 
   const showDescription = description && s.description_visible;
 
+  const highlightBlock = highlights.length
+    ? `<div class="highlights">${highlights
+        .map(
+          (h) =>
+            `<div class="highlight-item"><span class="highlight-mark">✓</span>${escapeHtml(h)}</div>`,
+        )
+        .join("")}</div>`
+    : "";
+
   const metaRow = metaItems.length
     ? `<div class="meta-row">${metaItems
         .map(
@@ -147,6 +157,9 @@ const render = ({
     .sp-empty { display: flex; align-items: center; justify-content: center; background: ${hexToRgba(primary, 0.12)}; color: ${primary}; font-size: 44px; font-family: '${display}', serif; }
     .sp-pre { font-family: '${accentFont}', cursive; font-size: 19px; color: ${accent}; margin-top: 10px; line-height: 0.9; }
     .sp-name { font-family: '${display}', serif; font-size: 18px; font-weight: 800; color: ${primary}; text-transform: uppercase; }
+    .highlights { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; }
+    .highlight-item { display: flex; align-items: flex-start; gap: 8px; font-size: 16px; color: ${primary}; font-weight: 500; line-height: 1.3; }
+    .highlight-mark { color: ${gold}; font-weight: 700; flex-shrink: 0; }
     .meta-row { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 18px 0; border-top: 1px solid ${hexToRgba(primary, 0.18)}; border-bottom: 1px solid ${hexToRgba(primary, 0.18)}; }
     .meta-item { display: flex; align-items: center; gap: 10px; }
     .meta-icon { width: 36px; height: 36px; border-radius: 50%; background: ${primary}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
@@ -186,6 +199,7 @@ const render = ({
   </div>
   <div class="mid-zone">
     ${speakerBlock}
+    ${highlightBlock}
     ${metaRow}
   </div>
   <div class="footer">

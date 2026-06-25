@@ -187,6 +187,12 @@ const FINALIZE_TOOL = {
             description:
               "2-4 short words or phrases naming the pillars/focus of the event (e.g. [\"Teaching\", \"Impartation\", \"Activation\"]), only if the conversation actually named distinct themes — don't invent generic ones just to fill this in.",
           },
+          highlights: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "2-4 short value/benefit phrases elaborating on what's already known about the event (e.g. \"Hands-on prophetic activation\", \"Time for personal ministry\", \"Connect with other leaders\") — these are your own reasonable elaboration of the tone and substance already established in the conversation, not new facts. Never invent a specific date, price, location, speaker name, or other concrete claim that wasn't actually given. Omit entirely if you don't have enough real substance to elaborate on without just restating the title.",
+          },
           audience: {
             type: "string",
             description:
@@ -256,7 +262,7 @@ If you are missing information that would materially change what you write, ask 
 - The event is co-hosted, partnered, or otherwise doesn't cleanly belong to ${ministry.name} — ask directly whether this is a partnered event and how it should be framed. A partnered event can still be written in this ministry's voice once you know who else is involved. Don't refuse to write it just because it doesn't fit neatly.
 - The audience, spiritual framing/series tie-in, cost, registration link, or location is needed for this platform and hasn't been given.${siblingSection}
 
-Once you have enough to write complete, accurate content for ${ministry.name}, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it. Always include the \`event\` object in that call when the content is about a specific event, with whatever structured fields (title, date, location, cost, cta, registration_url) were mentioned, so a matching flyer can be generated from the same facts without asking the user to retype them.`;
+Once you have enough to write complete, accurate content for ${ministry.name}, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it. Always include the \`event\` object in that call when the content is about a specific event, with whatever structured fields (title, date, location, cost, cta, registration_url) were mentioned, so a matching flyer can be generated from the same facts without asking the user to retype them. A flyer with just bare logistics looks empty — also include description, theme_tags, and highlights whenever there's enough real substance in the conversation to draw from, so the flyer feels as complete as the caption. Never use highlights or description to invent a fact that wasn't actually given.`;
 };
 
 const chatTurn = async ({

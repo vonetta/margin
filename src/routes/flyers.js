@@ -53,6 +53,10 @@ router.post(
       .optional()
       .isArray()
       .withMessage("theme_tags must be an array"),
+    body("highlights")
+      .optional()
+      .isArray()
+      .withMessage("highlights must be an array"),
   ],
   validate,
   async (req, res) => {
@@ -62,6 +66,7 @@ router.post(
         subtitle,
         description,
         theme_tags,
+        highlights,
         audience,
         date,
         location,
@@ -106,6 +111,7 @@ router.post(
         subtitle,
         description,
         theme_tags,
+        highlights,
         audience,
         date,
         location,
