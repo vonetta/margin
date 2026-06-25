@@ -249,7 +249,7 @@ const buildChatSystemPrompt = (
   const siblingSection = siblings.length
     ? `\n\nOTHER MINISTRIES YOU HAVE ACCESS TO\n\nThe person you're talking to also has access to: ${siblings
         .map((m) => `${m.name} (ministry_id: "${m.ministry_id}")`)
-        .join(", ")}. If the content actually belongs to one of these instead of ${ministry.name}, ask the user to confirm which one — don't guess. Once they confirm, call the switch_ministry tool with that ministry_id instead of writing the caption yourself; you don't have that ministry's voice profile loaded, so anything you wrote here would be in the wrong voice.`
+        .join(", ")}. You are already in ${ministry.name}'s workspace — that's who this content is for by default. Only raise the question of whether it actually belongs to one of these other ministries instead if the conversation itself gives you an actual reason to think so (the user names the other ministry, mentions co-hosting/partnering with them, or a detail like a registration link/venue/brand clearly points to them). Sibling access existing is not, by itself, a reason to ask — most events in this conversation belong to ${ministry.name} and should be finalized as such without a confirmation detour. If you do have a real signal of ambiguity, ask the user to confirm which one — don't guess — then call the switch_ministry tool with that ministry_id instead of writing the caption yourself; you don't have that ministry's voice profile loaded, so anything you wrote here would be in the wrong voice.`
     : "";
 
   return `${buildSystemPrompt(profile, ministry)}

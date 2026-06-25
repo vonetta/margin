@@ -217,6 +217,31 @@ describe("chatTurn", () => {
     );
   });
 
+  it("tells the model sibling access alone isn't a reason to ask which ministry an event belongs to", async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: "text", text: "What's the date?" }],
+    });
+
+    await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "We have an event" }],
+      availableMinistries: [
+        { ministry_id: "ktm", name: "KTM" },
+        { ministry_id: "salt-light", name: "Salt & Light" },
+      ],
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining(
+          "Sibling access existing is not, by itself, a reason to ask",
+        ),
+      }),
+    );
+  });
+
   it("returns switchTo when the model calls switch_ministry", async () => {
     mockCreate.mockResolvedValue({
       content: [
