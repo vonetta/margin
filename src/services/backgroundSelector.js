@@ -11,8 +11,8 @@ const LAYOUT_BG_HINTS = {
   feature: "atmospheric, the portrait will cover most of it",
 };
 
-// Build a brand-aware, layout-aware prompt
-const buildPrompt = (ministry, layout, tone) => {
+// Build a brand-aware, layout-aware, topic-aware prompt
+const buildPrompt = (ministry, layout, tone, topicHint) => {
   const colors = ministry?.branding?.colors || {};
   const palette = [
     colors.primary,
@@ -23,12 +23,20 @@ const buildPrompt = (ministry, layout, tone) => {
     .filter(Boolean)
     .join(", ");
   const hint = LAYOUT_BG_HINTS[layout] || "atmospheric and premium";
+  const topicLine = topicHint
+    ? ` Evoke the feeling of this specific event: ${topicHint} — through abstract shapes, light, and texture, not literal scenes.`
+    : "";
 
-  return `An elegant abstract background for a ministry event flyer. ${hint}. Cohesive palette harmonious with these brand colors: ${palette}. Luminous, with a clear readable center and generous negative space. No text, no words, no logos, no people.`;
+  return `An elegant abstract background for a ministry event flyer. ${hint}.${topicLine} Cohesive palette harmonious with these brand colors: ${palette}. Luminous, with a clear readable area and generous negative space. Abstract and atmospheric only — no text, no words, no logos, no recognizable faces, no photoreal human figures.`;
 };
 
-// Pick an existing background by tone, or generate + store a new one.
-const selectBackground = async ({ ministryId, layout, tone }) => {
+// Pick an existing background by tone, or generate + store a new one. A
+// plain gradient (every layout's built-in fallback) reads as flat once
+// it's the only thing filling an otherwise-empty canvas — generating a
+// real topic-relevant image gives that space something to look at,
+// without the risk a full photoreal scene carries (fake faces, unreliable
+// text), since this stays strictly abstract/atmospheric by prompt design.
+const selectBackground = async ({ ministryId, layout, tone, topicHint }) => {
   // 1. Try the library — prefer a tone match, else most recent
   const filter = { ministry_id: ministryId };
   let background = null;
@@ -45,14 +53,33 @@ const selectBackground = async ({ ministryId, layout, tone }) => {
     return { url: background.url, id: background._id, generated: false };
   }
 
-  // 2. Nothing in the library — don't auto-generate abstract AI art by
-  // default anymore. Every layout has its own brand-color gradient as a
-  // fallback when there's no backgroundUrl, which is the new default
-  // look (solid/gradient color blocks, matching real reference flyers
-  // instead of generic painterly swirls). AI-generated backgrounds are
-  // still available, just via the explicit POST /api/backgrounds/generate
-  // action, not automatically here.
-  return { url: null, id: null, generated: false };
+  // 2. Nothing in the library — generate one, store it, and reuse it for
+  // future flyers with this tone. If generation fails for any reason
+  // (quota, transient API error), fall back to the gradient rather than
+  // failing the whole flyer.
+  try {
+    const ministry = await Ministry.findOne({ ministry_id: ministryId });
+    const prompt = buildPrompt(ministry, layout, tone, topicHint);
+    const png = await generateBackground(prompt);
+    const { key, url } = await uploadFile({
+      ministryId,
+      category: "backgrounds",
+      buffer: png,
+      contentType: "image/png",
+      originalName: "background",
+    });
+    const created = await Background.create({
+      ministry_id: ministryId,
+      prompt,
+      url,
+      key,
+      tone,
+    });
+    return { url: created.url, id: created._id, generated: true };
+  } catch (error) {
+    console.error("Auto background generation failed, using gradient fallback:", error);
+    return { url: null, id: null, generated: false };
+  }
 };
 
 module.exports = { selectBackground, buildPrompt };

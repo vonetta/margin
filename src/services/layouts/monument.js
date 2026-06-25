@@ -105,7 +105,7 @@ const render = ({
 
   const tagPills =
     themeTags.length && s.tags_visible
-      ? `<div class="tag-row">${themeTags.map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('<span class="tag-dot">•</span>')}</div>`
+      ? `<div class="tag-row">${themeTags.map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join("")}</div>`
       : "";
 
   const showDescription = description && s.description_visible;
@@ -136,19 +136,18 @@ const render = ({
     html, body { width: ${dims.width}px; height: ${dims.height}px; }
     body { font-family: '${body}', sans-serif; overflow: hidden; display: flex; flex-direction: column; background: ${bg}; }
     .top-zone { position: relative; overflow: hidden; ${hasSpeakers ? "flex: 0 0 auto; min-height: 520px;" : "flex: 1; min-height: 0;"} ${photoZoneBg} }
-    .text-scrim { position: absolute; top: 0; left: 0; bottom: 0; width: 72%; background: linear-gradient(90deg, ${bg} 0%, ${bg} 62%, ${hexToRgba(bg, 0)} 100%); z-index: 1; }
+    .text-scrim { position: absolute; top: 0; left: 0; bottom: 0; width: 58%; background: linear-gradient(90deg, ${bg} 0%, ${bg} 42%, ${hexToRgba(bg, 0)} 100%); z-index: 1; }
     .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; z-index: 2; }
     .host-circle-wrap { position: relative; display: inline-block; }
     .host-circle-wrap .ribbon { position: absolute; top: -6px; right: -16px; }
     .host-circle { width: ${s.host_photo_size}px; height: ${s.host_photo_size}px; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background-size: cover; background-position: center top; background-color: ${hexToRgba("#ffffff", 0.15)}; display: flex; align-items: center; justify-content: center; font-size: ${Math.round(s.host_photo_size * 0.31)}px; color: #fff; font-family: '${display}', serif; }
-    .content { position: relative; z-index: 2; padding: 48px 56px 36px; width: 58%; }
+    .content { position: relative; z-index: 2; padding: 48px 48px 36px; width: 50%; }
     .top-bar { margin-bottom: 26px; }
     .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
     .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${accent}; line-height: 1; margin-top: 8px; }
     .desc { font-size: ${s.description_size}px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
-    .tag-row { margin-top: 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
-    .tag-pill { color: ${primary}; text-transform: uppercase; }
-    .tag-dot { color: ${gold}; margin: 0 8px; }
+    .tag-row { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
+    .tag-pill { display: inline-block; padding: 7px 18px; border-radius: 20px; border: 1.5px solid ${hexToRgba(primary, 0.5)}; color: ${primary}; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
     .ribbon { display: inline-block; padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
     .host-role { font-family: '${accentFont}', cursive; font-size: 24px; color: ${gold}; line-height: 1; text-align: center; }
     .host-name { font-family: '${display}', serif; font-size: 28px; font-weight: 800; color: #fff; text-transform: uppercase; line-height: 1.1; text-align: center; }
@@ -162,7 +161,7 @@ const render = ({
     .sp-empty { display: flex; align-items: center; justify-content: center; background: ${hexToRgba(primary, 0.12)}; color: ${primary}; font-size: 44px; font-family: '${display}', serif; }
     .sp-pre { font-family: '${accentFont}', cursive; font-size: 19px; color: ${accent}; margin-top: 10px; line-height: 0.9; }
     .sp-name { font-family: '${display}', serif; font-size: 18px; font-weight: 800; color: ${primary}; text-transform: uppercase; }
-    .highlights { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; }
+    .highlights { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
     .highlight-item { display: flex; align-items: flex-start; gap: 8px; font-size: 16px; color: ${primary}; font-weight: 500; line-height: 1.3; }
     .highlight-mark { color: ${gold}; font-weight: 700; flex-shrink: 0; }
     .meta-row { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 18px 0; border-top: 1px solid ${hexToRgba(primary, 0.18)}; border-bottom: 1px solid ${hexToRgba(primary, 0.18)}; }
@@ -171,10 +170,10 @@ const render = ({
     .meta-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: ${accent}; }
     .meta-value { font-size: 18px; font-weight: 700; color: ${primary}; }
     .meta-divider { width: 1px; height: 30px; background: ${hexToRgba(primary, 0.2)}; }
-    .footer { flex: 0 0 auto; background: ${primary}; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 56px; border-top: 4px solid ${gold}; }
-    .cta { font-family: '${display}', serif; font-size: ${s.cta_size}px; font-weight: 800; color: ${gold}; text-transform: uppercase; line-height: 1.15; }
+    .footer { flex: 0 0 auto; background: ${primary}; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 36px 56px; border-top: 4px solid ${gold}; }
+    .cta { font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.82)}px; font-weight: 800; color: ${gold}; text-transform: uppercase; line-height: 1.3; max-width: 70%; }
     .qr-slot { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
-    .qr-img { width: 116px; height: 116px; background: #fff; padding: 7px; border-radius: 8px; }
+    .qr-img { width: 148px; height: 148px; background: #fff; padding: 9px; border-radius: 8px; }
     .qr-caption { font-size: 14px; color: rgba(255,255,255,0.85); font-weight: 500; }
   `;
 
@@ -201,11 +200,11 @@ const render = ({
       ${subtitle ? `<div class="subtitle-script">${subtitle}</div>` : ""}
       ${tagPills}
       ${showDescription ? `<div class="desc">${description}</div>` : ""}
+      ${highlightBlock}
     </div>
   </div>
   <div class="mid-zone">
     ${speakerBlock}
-    ${highlightBlock}
     ${metaRow}
   </div>
   <div class="footer">

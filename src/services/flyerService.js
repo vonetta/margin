@@ -38,10 +38,14 @@ const generateFlyer = async ({
   let bgUrl = backgroundUrl || venueImage;
   let bgMeta = null;
   if (!bgUrl && autoBackground && ministryId) {
+    const topicHint = [content.title, ...(content.theme_tags || [])]
+      .filter(Boolean)
+      .join(", ");
     const selected = await selectBackground({
       ministryId,
       layout: chosenLayout,
       tone: typography.tone,
+      topicHint,
     });
     bgUrl = selected.url;
     bgMeta = {

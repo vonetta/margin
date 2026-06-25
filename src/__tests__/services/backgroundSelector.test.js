@@ -56,7 +56,29 @@ describe("selectBackground", () => {
     expect(result.url).toBe("https://existing.r2.dev/bg.png");
   });
 
-  it("returns no url when the library is empty, instead of auto-generating", async () => {
+  it("generates and stores a new background when the library is empty", async () => {
+    const result = await selectBackground({
+      ministryId: "ktm-test",
+      layout: "showcase",
+      tone: "formal",
+      topicHint: "Worship, Equipping",
+    });
+    expect(result.generated).toBe(true);
+    expect(result.url).toBe(
+      "https://pub-test.r2.dev/ktm-test/backgrounds/auto-abc.png",
+    );
+    expect(result.id).toBeTruthy();
+
+    const stored = await Background.findById(result.id);
+    expect(stored).toBeTruthy();
+    expect(stored.tone).toBe("formal");
+    expect(stored.prompt).toContain("Worship, Equipping");
+  });
+
+  it("falls back to the gradient when generation fails", async () => {
+    const { generateBackground } = require("../../services/imageService");
+    generateBackground.mockRejectedValueOnce(new Error("quota exceeded"));
+
     const result = await selectBackground({
       ministryId: "ktm-test",
       layout: "showcase",
