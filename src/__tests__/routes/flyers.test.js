@@ -15,6 +15,13 @@ jest.mock("../../services/storageService", () => ({
   safeDeleteFile: jest.fn().mockResolvedValue({ deleted: true }),
 }));
 
+const mockGenerateBackground = jest
+  .fn()
+  .mockResolvedValue(Buffer.from("fake-bg-png"));
+jest.mock("../../services/imageService", () => ({
+  generateBackground: (...args) => mockGenerateBackground(...args),
+}));
+
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
@@ -22,6 +29,7 @@ const Ministry = require("../../models/Ministry");
 const Flyer = require("../../models/Flyer");
 const Person = require("../../models/Person");
 const User = require("../../models/User");
+const Background = require("../../models/Background");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -39,6 +47,7 @@ afterAll(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await Flyer.deleteMany({ ministry_id: "ktm-test" });
   await Person.deleteMany({ ministry_id: "ktm-test" });
+  await Background.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -48,6 +57,7 @@ beforeEach(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await Flyer.deleteMany({ ministry_id: "ktm-test" });
   await Person.deleteMany({ ministry_id: "ktm-test" });
+  await Background.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -146,6 +156,25 @@ describe("POST /api/flyers/generate", () => {
     );
   });
 
+  it("forwards an accepted background_url straight to the renderer, bypassing auto-selection", async () => {
+    mockGenerateFlyer.mockClear();
+
+    await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Prophetic Training Workshop",
+        background_url: "https://pub-test.r2.dev/ktm-test/backgrounds/literal-abc.png",
+      });
+
+    expect(mockGenerateFlyer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backgroundUrl: "https://pub-test.r2.dev/ktm-test/backgrounds/literal-abc.png",
+      }),
+    );
+  });
+
   it("rejects a non-array theme_tags", async () => {
     const res = await request(app)
       .post("/api/flyers/generate")
@@ -172,6 +201,36 @@ describe("POST /api/flyers/generate", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ date: "June 12" });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/flyers/background-preview", () => {
+  it("generates and stores one candidate image without attaching it to a flyer", async () => {
+    const res = await request(app)
+      .post("/api/flyers/background-preview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ topic_hint: "Worship, Equipping" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.url).toBe(
+      "https://pub-test.r2.dev/ktm-test/flyers/f-abc.png",
+    );
+    expect(mockGenerateBackground).toHaveBeenCalledWith(
+      expect.stringContaining("Worship, Equipping"),
+    );
+
+    const stored = await Background.findById(res.body._id);
+    expect(stored).toBeTruthy();
+  });
+
+  it("rejects a team member (requires admin/leader)", async () => {
+    const res = await request(app)
+      .post("/api/flyers/background-preview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({});
+    expect(res.status).toBe(403);
   });
 });
 

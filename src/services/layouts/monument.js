@@ -8,6 +8,7 @@ const {
   renderRibbon,
   renderLogo,
   abstractLinesOverlay,
+  deriveColorVariants,
 } = require("./shared");
 const { validateStyle } = require("./styleSchema");
 
@@ -34,8 +35,9 @@ const render = ({
   style = null,
 }) => {
   const dims = providedDims || DIMENSIONS[size] || DIMENSIONS.social;
-  const { primary, accent, gold, bg, text } = resolveColors(branding);
-  const { display, body, accent: accentFont } = resolveFonts(typography);
+  const resolvedColors = resolveColors(branding);
+  const { bg, text } = resolvedColors;
+  const resolvedFonts = resolveFonts(typography);
 
   const title = escapeHtml(content.title || "");
   const subtitle = escapeHtml(content.subtitle || "");
@@ -50,7 +52,6 @@ const render = ({
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
 
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
-  const logo = renderLogo(branding.logo_url, 84);
 
   const hostImg = host && (host.cutout_url || host.headshot_url);
   const hasSpeakers = speakers.length > 0;
@@ -65,6 +66,29 @@ const render = ({
     ...(style || {}),
   });
   const speakerSize = s.speaker_photo_size;
+
+  // Every variant is mathematically derived from the ministry's own brand
+  // colors (see deriveColorVariants) — picking "warm" or "cool" can't drift
+  // off-brand, it just shifts emphasis within the same palette.
+  const variants = deriveColorVariants(resolvedColors);
+  const { primary, accent, gold } = variants[s.color_variant] || variants.brand;
+
+  // The wizard only ever sends one of the ministry's own curated
+  // type_system fonts, so an override here is still "on brand" — just a
+  // different pairing from the same curated set, not an arbitrary font.
+  const display = s.display_font || resolvedFonts.display;
+  const body = s.body_font || resolvedFonts.body;
+  const accentFont = s.accent_font || resolvedFonts.accent;
+
+  const logo = renderLogo(branding.logo_url, s.logo_size);
+  const logoInContent =
+    logo && s.logo_placement !== "footer"
+      ? `<div class="top-bar${s.logo_placement === "top-center" ? " top-bar-center" : ""}">${logo}</div>`
+      : "";
+  const logoInFooter =
+    logo && s.logo_placement === "footer"
+      ? `<div class="footer-logo">${logo}</div>`
+      : "";
 
   // The background (photo or brand gradient) spans the FULL top-zone
   // canvas rather than being confined to a narrow side panel — a hard
@@ -143,6 +167,7 @@ const render = ({
     .host-circle { width: ${s.host_photo_size}px; height: ${s.host_photo_size}px; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background-size: cover; background-position: center top; background-color: ${hexToRgba("#ffffff", 0.15)}; display: flex; align-items: center; justify-content: center; font-size: ${Math.round(s.host_photo_size * 0.31)}px; color: #fff; font-family: '${display}', serif; }
     .content { position: relative; z-index: 2; padding: 48px 48px 36px; width: 50%; }
     .top-bar { margin-bottom: 26px; }
+    .top-bar-center { text-align: center; }
     .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
     .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${accent}; line-height: 1; margin-top: 8px; }
     .desc { font-size: ${s.description_size}px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
@@ -171,6 +196,8 @@ const render = ({
     .meta-value { font-size: 18px; font-weight: 700; color: ${primary}; }
     .meta-divider { width: 1px; height: 30px; background: ${hexToRgba(primary, 0.2)}; }
     .footer { flex: 0 0 auto; background: ${primary}; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 36px 56px; border-top: 4px solid ${gold}; }
+    .footer-left { display: flex; flex-direction: column; gap: 14px; }
+    .footer-logo .logo { filter: brightness(0) invert(1); }
     .cta { font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.82)}px; font-weight: 800; color: ${gold}; text-transform: uppercase; line-height: 1.3; max-width: 70%; }
     .qr-slot { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
     .qr-img { width: 148px; height: 148px; background: #fff; padding: 9px; border-radius: 8px; }
@@ -195,7 +222,7 @@ const render = ({
       }
     </div>
     <div class="content">
-      ${logo ? `<div class="top-bar">${logo}</div>` : ""}
+      ${logoInContent}
       <div class="title">${title}</div>
       ${subtitle ? `<div class="subtitle-script">${subtitle}</div>` : ""}
       ${tagPills}
@@ -208,7 +235,10 @@ const render = ({
     ${metaRow}
   </div>
   <div class="footer">
-    ${cta ? `<div class="cta">${cta}</div>` : "<div></div>"}
+    <div class="footer-left">
+      ${logoInFooter}
+      ${cta ? `<div class="cta">${cta}</div>` : ""}
+    </div>
     ${qrBlock}
   </div>
 </body></html>`;

@@ -10,6 +10,11 @@ const { generateFlyer } = require("../services/flyerService");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { listLayouts, suggestLayout } = require("../services/layouts");
 const { validateStyle } = require("../services/layouts/styleSchema");
+const {
+  buildLiteralPrompt,
+} = require("../services/backgroundSelector");
+const { generateBackground } = require("../services/imageService");
+const Background = require("../models/Background");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -23,6 +28,46 @@ const validate = (req, res, next) => {
 router.get("/layouts", (req, res) => {
   res.json(listLayouts());
 });
+
+// POST /api/flyers/background-preview — generate one candidate literal
+// image (real scenes/people, not the abstract-only auto fallback) for the
+// styling wizard to show and let the user accept, regenerate, or skip.
+// Nothing here attaches to a flyer; the wizard passes the returned url back
+// as background_url on /generate only if the user actually accepts it.
+router.post(
+  "/background-preview",
+  requireRole("admin", "leader"),
+  [body("topic_hint").optional().trim()],
+  validate,
+  async (req, res) => {
+    try {
+      const ministry = await Ministry.findOne({ ministry_id: req.ministryId });
+      const prompt = buildLiteralPrompt(ministry, req.body.topic_hint);
+      const png = await generateBackground(prompt);
+
+      const { key, url } = await uploadFile({
+        ministryId: req.ministryId,
+        category: "backgrounds",
+        buffer: png,
+        contentType: "image/png",
+        originalName: "literal-preview",
+      });
+
+      const background = await Background.create({
+        ministry_id: req.ministryId,
+        prompt,
+        url,
+        key,
+        created_by: req.userId,
+      });
+
+      res.status(201).json(background);
+    } catch (error) {
+      console.error("Background preview generation error:", error);
+      res.status(500).json({ error: "Failed to generate a background image" });
+    }
+  },
+);
 
 // GET /api/flyers — flyer history for the ministry
 router.get("/", async (req, res) => {
@@ -58,6 +103,7 @@ router.post(
       .isArray()
       .withMessage("highlights must be an array"),
     body("platform").optional().trim(),
+    body("background_url").optional().trim(),
   ],
   validate,
   async (req, res) => {
@@ -78,6 +124,7 @@ router.post(
         speaker_ids = [],
         layout,
         platform,
+        background_url,
       } = req.body;
 
       // Always clamped to safe ranges regardless of where it came from —
@@ -133,6 +180,7 @@ router.post(
         style,
         ministryId: req.ministryId,
         platform: platform || null,
+        backgroundUrl: background_url || null,
       };
 
       // Generate both sizes

@@ -45,4 +45,29 @@ describe("validateStyle", () => {
       Object.keys(defaultStyle()).sort(),
     );
   });
+
+  it("accepts a valid enum value", () => {
+    expect(validateStyle({ logo_placement: "footer" }).logo_placement).toBe(
+      "footer",
+    );
+    expect(validateStyle({ color_variant: "warm" }).color_variant).toBe(
+      "warm",
+    );
+  });
+
+  it("falls back to the enum default for an invalid value", () => {
+    expect(
+      validateStyle({ logo_placement: "off-canvas" }).logo_placement,
+    ).toBe("top-left");
+  });
+
+  it("accepts a font override string", () => {
+    expect(validateStyle({ display_font: "Poppins" }).display_font).toBe(
+      "Poppins",
+    );
+  });
+
+  it("falls back to null for a missing font override", () => {
+    expect(validateStyle({}).display_font).toBeNull();
+  });
 });

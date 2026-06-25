@@ -30,6 +30,29 @@ const buildPrompt = (ministry, layout, tone, topicHint) => {
   return `An elegant abstract background for a ministry event flyer. ${hint}.${topicLine} Cohesive palette harmonious with these brand colors: ${palette}. Luminous, with a clear readable area and generous negative space. Abstract and atmospheric only — no text, no words, no logos, no recognizable faces, no photoreal human figures.`;
 };
 
+// A more literal, representational prompt — real scenes, real people —
+// for the wizard's opt-in "generate a relevant image" flow. Deliberately
+// separate from buildPrompt above: this is only ever used behind an
+// explicit user action where they see the result and choose to use it or
+// not, which is what makes the fake-face/unreliable-content risk
+// acceptable here in a way it wasn't for the silent auto-fallback.
+const buildLiteralPrompt = (ministry, topicHint) => {
+  const colors = ministry?.branding?.colors || {};
+  const palette = [
+    colors.primary,
+    colors.accent,
+    colors.gold,
+    colors.background,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const topicLine = topicHint
+    ? ` The event: ${topicHint}.`
+    : " A church gathering.";
+
+  return `A real, relevant photo-style image for a ministry event flyer.${topicLine} Show people authentically engaged — worship, prayer, a small group, hands raised, or a gathered congregation, whichever fits best. Warm, natural lighting, documentary/editorial photography style, not staged or artificial-looking. Cohesive with this color palette where natural: ${palette}. Leave open negative space on one side for text to sit on top. No text, no words, no logos overlaid on the image.`;
+};
+
 // Pick an existing background by tone, or generate + store a new one. A
 // plain gradient (every layout's built-in fallback) reads as flat once
 // it's the only thing filling an otherwise-empty canvas — generating a
@@ -82,4 +105,4 @@ const selectBackground = async ({ ministryId, layout, tone, topicHint }) => {
   }
 };
 
-module.exports = { selectBackground, buildPrompt };
+module.exports = { selectBackground, buildPrompt, buildLiteralPrompt };
