@@ -2,12 +2,13 @@ const { selectTypography } = require("./typographyService");
 const { buildGoogleFontsUrl } = require("./fontLoader");
 const { generateQRCode } = require("./qrService");
 const { renderLayout, suggestLayout } = require("./layouts");
-const { DIMENSIONS } = require("./layouts/shared");
+const { resolveDimensions } = require("./layouts/shared");
 const { renderHtmlToPng } = require("./flyerRenderer");
 const { selectBackground } = require("./backgroundSelector");
 
 const generateFlyer = async ({
   size = "social",
+  platform = null, // selects "social" dimensions per-platform (Instagram/Facebook/etc.)
   layout = null,
   content = {},
   branding = {},
@@ -56,8 +57,16 @@ const generateFlyer = async ({
     });
   }
 
+  // Resolved once and passed straight through, so the HTML template's own
+  // layout math and the screenshot viewport always agree on the exact same
+  // pixel dimensions — computing it twice from `size` independently risked
+  // them drifting apart whenever a platform's dimensions differ from the
+  // generic "social" default.
+  const dims = resolveDimensions(size, platform);
+
   const html = renderLayout(chosenLayout, {
     size,
+    dims,
     typography,
     branding,
     content,
@@ -69,7 +78,6 @@ const generateFlyer = async ({
     style,
   });
 
-  const dims = DIMENSIONS[size] || DIMENSIONS.social;
   const png = await renderHtmlToPng(html, dims.width, dims.height);
 
   return {

@@ -7,6 +7,7 @@ const {
   brandGradient,
   renderRibbon,
   renderLogo,
+  abstractLinesOverlay,
 } = require("./shared");
 const { validateStyle } = require("./styleSchema");
 
@@ -21,6 +22,7 @@ const meta = {
 
 const render = ({
   size = "social",
+  dims: providedDims = null,
   typography,
   branding = {},
   content = {},
@@ -31,7 +33,7 @@ const render = ({
   fontsUrl = null,
   style = null,
 }) => {
-  const dims = DIMENSIONS[size] || DIMENSIONS.social;
+  const dims = providedDims || DIMENSIONS[size] || DIMENSIONS.social;
   const { primary, accent, gold, bg, text } = resolveColors(branding);
   const { display, body, accent: accentFont } = resolveFonts(typography);
 
@@ -64,16 +66,18 @@ const render = ({
   });
   const speakerSize = s.speaker_photo_size;
 
-  // Two-zone composition: a light "paper" panel carries the title, a
-  // darker brand-color panel on the right carries the host photo, divided
-  // by a gold border seam — matching the reference flyers' photo-vs-
-  // content split instead of one flat full-bleed canvas. The whole page
-  // is a single flex column (top zone, then speakers/details, then
-  // footer) so nothing needs hand-tuned pixel offsets that break when
-  // content length changes.
+  // The background (photo or brand gradient) spans the FULL top-zone
+  // canvas rather than being confined to a narrow side panel — a hard
+  // color-block split reads as two separate boxes glued together once the
+  // panel is anything less than ~50% of the page. A light scrim fades in
+  // from the left so the title/text stay legible without needing a solid
+  // opaque block; the background still shows faintly through it and is
+  // fully visible on the right where the host photo sits. A loose abstract
+  // line texture sits over the gradient fallback so it doesn't read as a
+  // flat, empty color when there's no real photo to fill the space.
   const photoZoneBg = backgroundUrl
-    ? `background-image: linear-gradient(${hexToRgba(primary, 0.35)}, ${hexToRgba(primary, 0.55)}), url('${backgroundUrl}'); background-size: cover; background-position: center;`
-    : `background: ${brandGradient({ primary, accent, gold }, 165)};`;
+    ? `background-image: linear-gradient(${hexToRgba(primary, 0.3)}, ${hexToRgba(primary, 0.5)}), url('${backgroundUrl}'); background-size: cover; background-position: center;`
+    : `background-image: ${abstractLinesOverlay("#ffffff", 0.16)}, ${brandGradient({ primary, accent, gold }, 165)}; background-size: cover, cover;`;
 
   const speakerCards = speakers
     .map((s) => {
@@ -131,8 +135,9 @@ const render = ({
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: ${dims.width}px; height: ${dims.height}px; }
     body { font-family: '${body}', sans-serif; overflow: hidden; display: flex; flex-direction: column; background: ${bg}; }
-    .top-zone { position: relative; ${hasSpeakers ? "flex: 0 0 auto; min-height: 520px;" : "flex: 1; min-height: 0;"} }
-    .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 44%; border-left: 6px solid ${gold}; box-shadow: -10px 0 30px rgba(0,0,0,0.18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; ${photoZoneBg} }
+    .top-zone { position: relative; overflow: hidden; ${hasSpeakers ? "flex: 0 0 auto; min-height: 520px;" : "flex: 1; min-height: 0;"} ${photoZoneBg} }
+    .text-scrim { position: absolute; top: 0; left: 0; bottom: 0; width: 72%; background: linear-gradient(90deg, ${bg} 0%, ${bg} 62%, ${hexToRgba(bg, 0)} 100%); z-index: 1; }
+    .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; z-index: 2; }
     .host-circle-wrap { position: relative; display: inline-block; }
     .host-circle-wrap .ribbon { position: absolute; top: -6px; right: -16px; }
     .host-circle { width: ${s.host_photo_size}px; height: ${s.host_photo_size}px; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background-size: cover; background-position: center top; background-color: ${hexToRgba("#ffffff", 0.15)}; display: flex; align-items: center; justify-content: center; font-size: ${Math.round(s.host_photo_size * 0.31)}px; color: #fff; font-family: '${display}', serif; }
@@ -177,6 +182,7 @@ const render = ({
 <html><head><meta charset="utf-8">${fontLink}<style>${styles}</style></head>
 <body>
   <div class="top-zone">
+    <div class="text-scrim"></div>
     <div class="photo-zone">
       ${
         host

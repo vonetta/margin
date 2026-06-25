@@ -57,6 +57,7 @@ router.post(
       .optional()
       .isArray()
       .withMessage("highlights must be an array"),
+    body("platform").optional().trim(),
   ],
   validate,
   async (req, res) => {
@@ -76,6 +77,7 @@ router.post(
         host_id,
         speaker_ids = [],
         layout,
+        platform,
       } = req.body;
 
       // Always clamped to safe ranges regardless of where it came from —
@@ -130,6 +132,7 @@ router.post(
         layout: layout || null,
         style,
         ministryId: req.ministryId,
+        platform: platform || null,
       };
 
       // Generate both sizes

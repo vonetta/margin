@@ -19,6 +19,24 @@ const DIMENSIONS = {
   print: { width: 1275, height: 1650 },
 };
 
+// Each platform has its own native aspect ratio — a flyer sized for an
+// Instagram feed post looks cropped/wrong dropped straight into a Facebook
+// link card or a square quote card. Print dimensions don't vary by
+// platform, so only the "social" size slot is platform-aware.
+const PLATFORM_DIMENSIONS = {
+  Instagram: { width: 1080, height: 1350 }, // 4:5 feed post
+  Facebook: { width: 1200, height: 1200 }, // square reads best in-feed
+  "Quote card": { width: 1080, height: 1080 }, // square
+  Email: { width: 1200, height: 628 }, // wide banner, fits inline in a body
+};
+
+const resolveDimensions = (size = "social", platform = null) => {
+  if (size === "social" && platform && PLATFORM_DIMENSIONS[platform]) {
+    return PLATFORM_DIMENSIONS[platform];
+  }
+  return DIMENSIONS[size] || DIMENSIONS.social;
+};
+
 // Resolve the colors a layout uses from ministry branding, with safe fallbacks
 const resolveColors = (branding = {}) => {
   const c = branding.colors || {};
@@ -73,14 +91,30 @@ const renderLogo = (logoUrl, height = 56) => {
   return `<img class="logo" src="${logoUrl}" style="height:${height}px;" alt="logo" />`;
 };
 
+// A handful of loose, flowing curved strokes for texture over a gradient
+// fallback (no real photo) — addresses backgrounds that otherwise read as a
+// flat, empty color block once they're not confined to a small panel.
+const abstractLinesOverlay = (color = "#ffffff", opacity = 0.14) => {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='1000' viewBox='0 0 800 1000'>
+    <path d='M-100,180 C150,80 250,420 800,260' stroke='${color}' stroke-width='2' fill='none' opacity='${opacity}'/>
+    <path d='M-100,520 C200,380 320,760 850,560' stroke='${color}' stroke-width='2' fill='none' opacity='${opacity}'/>
+    <path d='M-50,850 C250,700 400,980 800,820' stroke='${color}' stroke-width='1.5' fill='none' opacity='${opacity * 0.85}'/>
+    <path d='M100,-50 C300,150 150,300 450,200' stroke='${color}' stroke-width='1.5' fill='none' opacity='${opacity * 0.7}'/>
+  </svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+};
+
 module.exports = {
   escapeHtml,
   hexToRgba,
   DIMENSIONS,
+  PLATFORM_DIMENSIONS,
+  resolveDimensions,
   resolveColors,
   resolveFonts,
   brandGradient,
   renderPill,
   renderRibbon,
   renderLogo,
+  abstractLinesOverlay,
 };

@@ -20,6 +20,7 @@ const meta = {
 
 const render = ({
   size = "social",
+  dims: providedDims = null,
   typography,
   branding = {},
   content = {},
@@ -29,7 +30,7 @@ const render = ({
   backgroundUrl = null,
   fontsUrl = null,
 }) => {
-  const dims = DIMENSIONS[size] || DIMENSIONS.social;
+  const dims = providedDims || DIMENSIONS[size] || DIMENSIONS.social;
   const { primary, accent, gold } = resolveColors(branding);
   const { display, body, accent: accentFont } = resolveFonts(typography);
 
