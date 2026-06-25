@@ -41,7 +41,7 @@ const render = ({
   const footerNote = escapeHtml(content.footer_note || "");
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
-  const logo = renderLogo(branding.logo_url, 48);
+  const logo = renderLogo(branding.logo_url, 72);
 
   // Without a real venue photo, this layout used to fall back to a flat
   // two-color gradient that looked like a placeholder. Same brand gradient

@@ -86,7 +86,7 @@ const renderRibbon = (text, bg, color = "#fff") => {
 };
 
 // Logo block, top-left corner convention used by every reference flyer.
-const renderLogo = (logoUrl, height = 56) => {
+const renderLogo = (logoUrl, height = 80) => {
   if (!logoUrl) return "";
   return `<img class="logo" src="${logoUrl}" style="height:${height}px;" alt="logo" />`;
 };

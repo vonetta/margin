@@ -50,7 +50,7 @@ const render = ({
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
 
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
-  const logo = renderLogo(branding.logo_url, 56);
+  const logo = renderLogo(branding.logo_url, 84);
 
   const hostImg = host && (host.cutout_url || host.headshot_url);
   const hasSpeakers = speakers.length > 0;
