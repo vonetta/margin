@@ -151,6 +151,27 @@ describe("chatTurn", () => {
     expect(result.style.subtitle_size).toBe(defaultStyle().subtitle_size);
   });
 
+  it("tells the model to propose a title itself rather than refuse without one", async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: "text", text: "What's the date?" }],
+    });
+
+    await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "We have an event next week" }],
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining(
+          "Writing a strong title/subtitle when the user hasn't supplied one is your job",
+        ),
+      }),
+    );
+  });
+
   it("does not offer switch_ministry when there are no sibling ministries", async () => {
     mockCreate.mockResolvedValue({
       content: [{ type: "text", text: "What's the date?" }],

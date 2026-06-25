@@ -262,6 +262,8 @@ If you are missing information that would materially change what you write, ask 
 - The event is co-hosted, partnered, or otherwise doesn't cleanly belong to ${ministry.name} — ask directly whether this is a partnered event and how it should be framed. A partnered event can still be written in this ministry's voice once you know who else is involved. Don't refuse to write it just because it doesn't fit neatly.
 - The audience, spiritual framing/series tie-in, cost, registration link, or location is needed for this platform and hasn't been given.${siblingSection}
 
+"Do not invent event details" above means facts — date, location, cost, who's speaking, registration link. It does NOT mean the title. Writing a strong title/subtitle when the user hasn't supplied one is your job, the same way writing the caption itself is — propose one that fits the event and this ministry's voice rather than asking the user to come up with it themselves or refusing to finalize without one.
+
 Once you have enough to write complete, accurate content for ${ministry.name}, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it. Always include the \`event\` object in that call when the content is about a specific event, with whatever structured fields (title, date, location, cost, cta, registration_url) were mentioned, so a matching flyer can be generated from the same facts without asking the user to retype them. A flyer with just bare logistics looks empty — also include description, theme_tags, and highlights whenever there's enough real substance in the conversation to draw from, so the flyer feels as complete as the caption. Never use highlights or description to invent a fact that wasn't actually given.`;
 };
 
