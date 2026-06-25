@@ -8,6 +8,7 @@ const {
   renderRibbon,
   renderLogo,
 } = require("./shared");
+const { validateStyle } = require("./styleSchema");
 
 const meta = {
   name: "Monument",
@@ -28,6 +29,7 @@ const render = ({
   qrDataUrl = null,
   backgroundUrl = null,
   fontsUrl = null,
+  style = null,
 }) => {
   const dims = DIMENSIONS[size] || DIMENSIONS.social;
   const { primary, accent, gold, bg, text } = resolveColors(branding);
@@ -50,7 +52,16 @@ const render = ({
   const hostImg = host && (host.cutout_url || host.headshot_url);
   const hasSpeakers = speakers.length > 0;
   const speakerCount = speakers.length;
-  const speakerSize = speakerCount <= 2 ? 200 : speakerCount === 3 ? 170 : 150;
+  // Auto-scale by count first, then let an explicit AI/wizard override win —
+  // composing the two means "no opinion" (most common case) still gets the
+  // sensible per-count default instead of one fixed size for every count.
+  const autoSpeakerSize =
+    speakerCount <= 2 ? 200 : speakerCount === 3 ? 170 : 150;
+  const s = validateStyle({
+    speaker_photo_size: autoSpeakerSize,
+    ...(style || {}),
+  });
+  const speakerSize = s.speaker_photo_size;
 
   // Two-zone composition: a light "paper" panel carries the title, a
   // darker brand-color panel on the right carries the host photo, divided
@@ -87,9 +98,12 @@ const render = ({
     audience && { icon: "👥", label: "For", value: audience },
   ].filter(Boolean);
 
-  const tagPills = themeTags.length
-    ? `<div class="tag-row">${themeTags.map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('<span class="tag-dot">•</span>')}</div>`
-    : "";
+  const tagPills =
+    themeTags.length && s.tags_visible
+      ? `<div class="tag-row">${themeTags.map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('<span class="tag-dot">•</span>')}</div>`
+      : "";
+
+  const showDescription = description && s.description_visible;
 
   const metaRow = metaItems.length
     ? `<div class="meta-row">${metaItems
@@ -111,12 +125,12 @@ const render = ({
     .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 44%; border-left: 6px solid ${gold}; box-shadow: -10px 0 30px rgba(0,0,0,0.18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; ${photoZoneBg} }
     .host-circle-wrap { position: relative; display: inline-block; }
     .host-circle-wrap .ribbon { position: absolute; top: -6px; right: -16px; }
-    .host-circle { width: 230px; height: 230px; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background-size: cover; background-position: center top; background-color: ${hexToRgba("#ffffff", 0.15)}; display: flex; align-items: center; justify-content: center; font-size: 72px; color: #fff; font-family: '${display}', serif; }
+    .host-circle { width: ${s.host_photo_size}px; height: ${s.host_photo_size}px; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background-size: cover; background-position: center top; background-color: ${hexToRgba("#ffffff", 0.15)}; display: flex; align-items: center; justify-content: center; font-size: ${Math.round(s.host_photo_size * 0.31)}px; color: #fff; font-family: '${display}', serif; }
     .content { position: relative; z-index: 2; padding: 48px 56px 36px; width: 58%; }
     .top-bar { margin-bottom: 26px; }
-    .title { font-family: '${display}', serif; font-weight: 800; font-size: 70px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
-    .subtitle-script { font-family: '${accentFont}', cursive; font-size: 48px; color: ${accent}; line-height: 1; margin-top: 8px; }
-    .desc { font-size: 18px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
+    .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
+    .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${accent}; line-height: 1; margin-top: 8px; }
+    .desc { font-size: ${s.description_size}px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
     .tag-row { margin-top: 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
     .tag-pill { color: ${primary}; text-transform: uppercase; }
     .tag-dot { color: ${gold}; margin: 0 8px; }
@@ -140,7 +154,7 @@ const render = ({
     .meta-value { font-size: 18px; font-weight: 700; color: ${primary}; }
     .meta-divider { width: 1px; height: 30px; background: ${hexToRgba(primary, 0.2)}; }
     .footer { flex: 0 0 auto; background: ${primary}; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 56px; border-top: 4px solid ${gold}; }
-    .cta { font-family: '${display}', serif; font-size: 34px; font-weight: 800; color: ${gold}; text-transform: uppercase; line-height: 1.15; }
+    .cta { font-family: '${display}', serif; font-size: ${s.cta_size}px; font-weight: 800; color: ${gold}; text-transform: uppercase; line-height: 1.15; }
     .qr-slot { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
     .qr-img { width: 116px; height: 116px; background: #fff; padding: 7px; border-radius: 8px; }
     .qr-caption { font-size: 14px; color: rgba(255,255,255,0.85); font-weight: 500; }
@@ -167,7 +181,7 @@ const render = ({
       <div class="title">${title}</div>
       ${subtitle ? `<div class="subtitle-script">${subtitle}</div>` : ""}
       ${tagPills}
-      ${description ? `<div class="desc">${description}</div>` : ""}
+      ${showDescription ? `<div class="desc">${description}</div>` : ""}
     </div>
   </div>
   <div class="mid-zone">

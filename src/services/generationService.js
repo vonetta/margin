@@ -1,4 +1,18 @@
 const Anthropic = require("@anthropic-ai/sdk");
+const { STYLE_SCHEMA, validateStyle } = require("./layouts/styleSchema");
+
+// Build the finalize_caption tool's `style` property schema straight from
+// STYLE_SCHEMA so the two never drift apart — the AI's proposed values get
+// clamped by validateStyle() server-side regardless of what it picks, so
+// this is a hint to the model about the *shape*, not a trust boundary.
+const styleToolProperties = Object.fromEntries(
+  Object.entries(STYLE_SCHEMA).map(([key, def]) => [
+    key,
+    def.type === "number"
+      ? { type: "number", minimum: def.min, maximum: def.max }
+      : { type: "boolean" },
+  ]),
+);
 
 // AiProfile stores ctas/registers as Mongoose Maps. Object.entries() on a
 // real Mongoose Map returns its internal bookkeeping properties, not the
@@ -185,6 +199,12 @@ const FINALIZE_TOOL = {
           registration_url: { type: "string" },
         },
       },
+      style: {
+        type: "object",
+        description:
+          "Optional sizing/visibility hints for the matching flyer, based on how much content there actually is — e.g. a long title should get a smaller title_size, a rich description should get description_visible: true, a one-line title with nothing else can afford a larger title_size. Every value gets clamped to a safe range server-side regardless of what you pick, so use your judgment rather than always picking the same numbers. Omit entirely if you're not confident a particular value helps — the defaults are reasonable.",
+        properties: styleToolProperties,
+      },
     },
     required: ["caption"],
   },
@@ -285,6 +305,7 @@ const chatTurn = async ({
       done: true,
       caption: toolUse.input.caption,
       event: toolUse.input.event || null,
+      style: validateStyle(toolUse.input.style),
     };
   }
 

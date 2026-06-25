@@ -19,6 +19,7 @@ const generateFlyer = async ({
   venueImage = null,
   ministryId = null, // needed for auto background selection
   autoBackground = true, // off for tests / when caller supplies a bg
+  style = null,
 }) => {
   const tone = content.event_type || content.title || "";
   const chosenLayout =
@@ -65,6 +66,7 @@ const generateFlyer = async ({
     qrDataUrl,
     backgroundUrl: bgUrl,
     fontsUrl,
+    style,
   });
 
   const dims = DIMENSIONS[size] || DIMENSIONS.social;

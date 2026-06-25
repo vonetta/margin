@@ -9,6 +9,7 @@ const { requireRole } = require("../middleware/auth");
 const { generateFlyer } = require("../services/flyerService");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { listLayouts, suggestLayout } = require("../services/layouts");
+const { validateStyle } = require("../services/layouts/styleSchema");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -72,6 +73,11 @@ router.post(
         layout,
       } = req.body;
 
+      // Always clamped to safe ranges regardless of where it came from —
+      // an AI-proposed value from the chat, a manual override from the
+      // customization wizard, or a raw API call.
+      const style = validateStyle(req.body.style);
+
       // Resolve ministry branding + type system
       const ministry = await Ministry.findOne({ ministry_id: req.ministryId });
       const aiProfile = await AiProfile.findOne({
@@ -116,6 +122,7 @@ router.post(
         host,
         speakers,
         layout: layout || null,
+        style,
         ministryId: req.ministryId,
       };
 

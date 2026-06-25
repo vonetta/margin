@@ -9,6 +9,7 @@ jest.mock("@anthropic-ai/sdk", () => {
 process.env.ANTHROPIC_API_KEY = "test-key";
 
 const { chatTurn } = require("../../services/generationService");
+const { defaultStyle } = require("../../services/layouts/styleSchema");
 
 const profile = {
   voice_profile: {
@@ -84,6 +85,7 @@ describe("chatTurn", () => {
       done: true,
       caption: "Final caption text",
       event: null,
+      style: defaultStyle(),
     });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,7 +121,34 @@ describe("chatTurn", () => {
       done: true,
       caption: "Final caption text",
       event: { title: "Worship Workshop", date: "July 20" },
+      style: defaultStyle(),
     });
+  });
+
+  it("includes a validated style object when the model proposes one", async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        {
+          type: "tool_use",
+          name: "finalize_caption",
+          input: {
+            caption: "Final caption text",
+            style: { title_size: 9999, description_visible: false },
+          },
+        },
+      ],
+    });
+
+    const result = await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "Worship Workshop July 20" }],
+    });
+
+    expect(result.style.title_size).toBe(96);
+    expect(result.style.description_visible).toBe(false);
+    expect(result.style.subtitle_size).toBe(defaultStyle().subtitle_size);
   });
 
   it("does not offer switch_ministry when there are no sibling ministries", async () => {

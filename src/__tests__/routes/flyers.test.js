@@ -1,8 +1,9 @@
+const mockGenerateFlyer = jest.fn().mockResolvedValue({
+  png: Buffer.from("fake-flyer-png"),
+  meta: { layout: "monument", tone: "formal", background_id: "bg1" },
+});
 jest.mock("../../services/flyerService", () => ({
-  generateFlyer: jest.fn().mockResolvedValue({
-    png: Buffer.from("fake-flyer-png"),
-    meta: { layout: "monument", tone: "formal", background_id: "bg1" },
-  }),
+  generateFlyer: (...args) => mockGenerateFlyer(...args),
 }));
 
 jest.mock("../../services/storageService", () => ({
@@ -121,6 +122,28 @@ describe("POST /api/flyers/generate", () => {
     expect(res.body.content.description).toBe("Step into the supernatural.");
     expect(res.body.content.theme_tags).toEqual(["Teaching", "Impartation"]);
     expect(res.body.content.audience).toBe("Leaders and prophetic voices");
+  });
+
+  it("clamps an out-of-range style value before passing it to the renderer", async () => {
+    mockGenerateFlyer.mockClear();
+
+    await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Prophetic Training Workshop",
+        style: { title_size: 99999, description_visible: false },
+      });
+
+    expect(mockGenerateFlyer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        style: expect.objectContaining({
+          title_size: 96,
+          description_visible: false,
+        }),
+      }),
+    );
   });
 
   it("rejects a non-array theme_tags", async () => {
