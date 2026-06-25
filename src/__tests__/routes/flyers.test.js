@@ -105,6 +105,34 @@ describe("POST /api/flyers/generate", () => {
     expect(res.body.layout).toBe("monument");
   });
 
+  it("saves description, theme_tags, and audience on the flyer record", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Prophetic Training Workshop",
+        description: "Step into the supernatural.",
+        theme_tags: ["Teaching", "Impartation"],
+        audience: "Leaders and prophetic voices",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.content.description).toBe("Step into the supernatural.");
+    expect(res.body.content.theme_tags).toEqual(["Teaching", "Impartation"]);
+    expect(res.body.content.audience).toBe("Leaders and prophetic voices");
+  });
+
+  it("rejects a non-array theme_tags", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Should fail", theme_tags: "not an array" });
+
+    expect(res.status).toBe(400);
+  });
+
   it("rejects generation by a team member", async () => {
     const res = await request(app)
       .post("/api/flyers/generate")

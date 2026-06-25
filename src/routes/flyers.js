@@ -48,6 +48,10 @@ router.post(
       .isArray()
       .withMessage("speaker_ids must be an array"),
     body("qr_url").optional().trim(),
+    body("theme_tags")
+      .optional()
+      .isArray()
+      .withMessage("theme_tags must be an array"),
   ],
   validate,
   async (req, res) => {
@@ -55,6 +59,9 @@ router.post(
       const {
         title,
         subtitle,
+        description,
+        theme_tags,
+        audience,
         date,
         location,
         cost,
@@ -91,6 +98,9 @@ router.post(
       const content = {
         title,
         subtitle,
+        description,
+        theme_tags,
+        audience,
         date,
         location,
         cost,

@@ -35,6 +35,9 @@ const render = ({
 
   const title = escapeHtml(content.title || "");
   const subtitle = escapeHtml(content.subtitle || "");
+  const description = escapeHtml(content.description || "");
+  const themeTags = Array.isArray(content.theme_tags) ? content.theme_tags : [];
+  const audience = escapeHtml(content.audience || "");
   const dateLine = escapeHtml(content.date || "");
   const location = escapeHtml(content.location || "");
   const cost = escapeHtml(content.cost || "");
@@ -81,7 +84,12 @@ const render = ({
     dateLine && { icon: "📅", label: "When", value: dateLine },
     location && { icon: "📍", label: "Where", value: location },
     cost && { icon: "💰", label: "Cost", value: cost },
+    audience && { icon: "👥", label: "For", value: audience },
   ].filter(Boolean);
+
+  const tagPills = themeTags.length
+    ? `<div class="tag-row">${themeTags.map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('<span class="tag-dot">•</span>')}</div>`
+    : "";
 
   const metaRow = metaItems.length
     ? `<div class="meta-row">${metaItems
@@ -109,6 +117,9 @@ const render = ({
     .title { font-family: '${display}', serif; font-weight: 800; font-size: 70px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
     .subtitle-script { font-family: '${accentFont}', cursive; font-size: 48px; color: ${accent}; line-height: 1; margin-top: 8px; }
     .desc { font-size: 18px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
+    .tag-row { margin-top: 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
+    .tag-pill { color: ${primary}; text-transform: uppercase; }
+    .tag-dot { color: ${gold}; margin: 0 8px; }
     .ribbon { display: inline-block; padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
     .host-role { font-family: '${accentFont}', cursive; font-size: 24px; color: ${gold}; line-height: 1; text-align: center; }
     .host-name { font-family: '${display}', serif; font-size: 28px; font-weight: 800; color: #fff; text-transform: uppercase; line-height: 1.1; text-align: center; }
@@ -155,6 +166,8 @@ const render = ({
       ${logo ? `<div class="top-bar">${logo}</div>` : ""}
       <div class="title">${title}</div>
       ${subtitle ? `<div class="subtitle-script">${subtitle}</div>` : ""}
+      ${tagPills}
+      ${description ? `<div class="desc">${description}</div>` : ""}
     </div>
   </div>
   <div class="mid-zone">

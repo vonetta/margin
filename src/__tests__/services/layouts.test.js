@@ -86,6 +86,22 @@ describe("suggestLayout", () => {
     }
   });
 
+  it("renders description, theme_tags, and audience when provided", () => {
+    const html = renderLayout("monument", {
+      content: {
+        title: "Test Event",
+        description: "Step into the supernatural.",
+        theme_tags: ["Teaching", "Impartation"],
+        audience: "Leaders and prophetic voices",
+      },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+    });
+    expect(html).toContain("Step into the supernatural.");
+    expect(html).toContain("Teaching");
+    expect(html).toContain("Impartation");
+    expect(html).toContain("Leaders and prophetic voices");
+  });
+
   it("lists all four layouts", () => {
     const layouts = listLayouts();
     expect(layouts.length).toBe(4);

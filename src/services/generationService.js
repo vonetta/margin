@@ -158,10 +158,26 @@ const FINALIZE_TOOL = {
       event: {
         type: "object",
         description:
-          "Structured event details mentioned anywhere in the conversation, so they can be reused to generate a matching flyer. Include this object whenever the content is about a specific event with a date, location, or similar — omit individual fields that were never mentioned. Omit the whole `event` object entirely for non-event content (a quote card, a general reflection, a recurring series with no single date).",
+          "Structured event details mentioned anywhere in the conversation, so they can be reused to generate a matching flyer. Include this object whenever the content is about a specific event with a date, location, or similar — omit individual fields that were never mentioned. Omit the whole `event` object entirely for non-event content (a quote card, a general reflection, a recurring series with no single date). Pull description and theme_tags from the same well of detail you used to write the caption itself — the flyer should feel as substantive as the caption, not just the bare logistics.",
         properties: {
           title: { type: "string" },
           subtitle: { type: "string" },
+          description: {
+            type: "string",
+            description:
+              "One short, evocative sentence capturing the heart/why of the event — pulled from the same voice and detail used in the caption's hook or body, not a repeat of the title. Omit if the caption doesn't have anything beyond logistics to draw from.",
+          },
+          theme_tags: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "2-4 short words or phrases naming the pillars/focus of the event (e.g. [\"Teaching\", \"Impartation\", \"Activation\"]), only if the conversation actually named distinct themes — don't invent generic ones just to fill this in.",
+          },
+          audience: {
+            type: "string",
+            description:
+              "Who this is for, in a few words (e.g. \"Worship leaders, singers, and songwriters\"), if mentioned anywhere in the conversation.",
+          },
           date: { type: "string" },
           location: { type: "string" },
           cost: { type: "string" },
