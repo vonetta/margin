@@ -46,6 +46,8 @@ const render = ({
 
   const hostImg = host && (host.cutout_url || host.headshot_url);
   const hasSpeakers = speakers.length > 0;
+  const speakerCount = speakers.length;
+  const speakerSize = speakerCount <= 2 ? 200 : speakerCount === 3 ? 170 : 150;
 
   // Two-zone composition: a light "paper" panel carries the title, a
   // darker brand-color panel on the right carries the host photo, divided
@@ -64,7 +66,7 @@ const render = ({
       const photo = img
         ? `<div class="sp-photo" style="background-image:url('${img}')"></div>`
         : `<div class="sp-photo sp-empty">${escapeHtml((s.name || "?").charAt(0))}</div>`;
-      return `<div class="sp-card">${photo}
+      return `<div class="sp-card" style="width:${speakerSize}px;">${photo}
         ${s.title ? `<div class="sp-pre">${escapeHtml(s.title)}</div>` : ""}
         <div class="sp-name">${escapeHtml(s.name || "")}</div></div>`;
     })
@@ -98,31 +100,31 @@ const render = ({
     html, body { width: ${dims.width}px; height: ${dims.height}px; }
     body { font-family: '${body}', sans-serif; overflow: hidden; display: flex; flex-direction: column; background: ${bg}; }
     .top-zone { position: relative; ${hasSpeakers ? "flex: 0 0 auto; min-height: 520px;" : "flex: 1; min-height: 0;"} }
-    .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 44%; border-left: 6px solid ${gold}; box-shadow: -10px 0 30px rgba(0,0,0,0.18); ${photoZoneBg} }
-    .host-photo { position: absolute; inset: 0; background-image: url('${hostImg || ""}'); background-size: cover; background-position: center top; }
-    .host-scrim { position: absolute; inset: 0; background: linear-gradient(to top, ${hexToRgba(primary, 0.75)} 0%, transparent 45%); }
-    .host-tag { position: absolute; bottom: 28px; left: 28px; right: 20px; z-index: 5; }
+    .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 44%; border-left: 6px solid ${gold}; box-shadow: -10px 0 30px rgba(0,0,0,0.18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; ${photoZoneBg} }
+    .host-circle-wrap { position: relative; display: inline-block; }
+    .host-circle-wrap .ribbon { position: absolute; top: -6px; right: -16px; }
+    .host-circle { width: 230px; height: 230px; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.35); background-size: cover; background-position: center top; background-color: ${hexToRgba("#ffffff", 0.15)}; display: flex; align-items: center; justify-content: center; font-size: 72px; color: #fff; font-family: '${display}', serif; }
     .content { position: relative; z-index: 2; padding: 48px 56px 36px; width: 58%; }
     .top-bar { margin-bottom: 26px; }
     .title { font-family: '${display}', serif; font-weight: 800; font-size: 70px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
     .subtitle-script { font-family: '${accentFont}', cursive; font-size: 48px; color: ${accent}; line-height: 1; margin-top: 8px; }
     .desc { font-size: 18px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
-    .ribbon { display: inline-block; padding: 6px 18px; border-radius: 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-    .host-role { font-family: '${accentFont}', cursive; font-size: 24px; color: ${gold}; margin-top: 8px; line-height: 1; }
-    .host-name { font-family: '${display}', serif; font-size: 28px; font-weight: 800; color: #fff; text-transform: uppercase; line-height: 1.1; }
+    .ribbon { display: inline-block; padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+    .host-role { font-family: '${accentFont}', cursive; font-size: 24px; color: ${gold}; line-height: 1; text-align: center; }
+    .host-name { font-family: '${display}', serif; font-size: 28px; font-weight: 800; color: #fff; text-transform: uppercase; line-height: 1.1; text-align: center; }
     .mid-zone { ${hasSpeakers ? "flex: 1; min-height: 0;" : "flex: 0 0 auto;"} overflow: hidden; padding: 28px 56px; background: ${bg}; display: flex; flex-direction: column; justify-content: center; gap: 26px; }
     .slabel-row { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
     .slabel-line { flex: 1; height: 1px; background: ${hexToRgba(gold, 0.7)}; }
     .slabel { font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; color: ${primary}; font-weight: 700; white-space: nowrap; }
-    .speakers { display: flex; gap: 20px; justify-content: center; }
-    .sp-card { text-align: center; flex: 1; max-width: 220px; }
-    .sp-photo { width: 100%; aspect-ratio: 0.95; border-radius: 10px; background-size: cover; background-position: center top; box-shadow: 0 6px 18px rgba(0,0,0,0.2); }
+    .speakers { display: flex; gap: 26px; justify-content: center; }
+    .sp-card { text-align: center; flex: 0 0 auto; }
+    .sp-photo { width: 100%; aspect-ratio: 1; border-radius: 50%; background-size: cover; background-position: center top; border: 5px solid ${hexToRgba(gold, 0.85)}; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
     .sp-empty { display: flex; align-items: center; justify-content: center; background: ${hexToRgba(primary, 0.12)}; color: ${primary}; font-size: 44px; font-family: '${display}', serif; }
-    .sp-pre { font-family: '${accentFont}', cursive; font-size: 20px; color: ${accent}; margin-top: 10px; line-height: 0.9; }
-    .sp-name { font-family: '${display}', serif; font-size: 20px; font-weight: 800; color: ${primary}; text-transform: uppercase; }
+    .sp-pre { font-family: '${accentFont}', cursive; font-size: 19px; color: ${accent}; margin-top: 10px; line-height: 0.9; }
+    .sp-name { font-family: '${display}', serif; font-size: 18px; font-weight: 800; color: ${primary}; text-transform: uppercase; }
     .meta-row { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 18px 0; border-top: 1px solid ${hexToRgba(primary, 0.18)}; border-bottom: 1px solid ${hexToRgba(primary, 0.18)}; }
     .meta-item { display: flex; align-items: center; gap: 10px; }
-    .meta-icon { font-size: 22px; }
+    .meta-icon { width: 36px; height: 36px; border-radius: 50%; background: ${primary}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
     .meta-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: ${accent}; }
     .meta-value { font-size: 18px; font-weight: 700; color: ${primary}; }
     .meta-divider { width: 1px; height: 30px; background: ${hexToRgba(primary, 0.2)}; }
@@ -138,14 +140,14 @@ const render = ({
 <body>
   <div class="top-zone">
     <div class="photo-zone">
-      ${hostImg ? `<div class="host-photo"></div><div class="host-scrim"></div>` : ""}
       ${
         host
-          ? `<div class="host-tag">
-               ${renderRibbon("HOST", primary, "#fff")}
-               <div class="host-role">${host.title ? escapeHtml(host.title) : ""}</div>
-               <div class="host-name">${escapeHtml(host.name || "")}</div>
-             </div>`
+          ? `<div class="host-circle-wrap">
+               <div class="host-circle" ${hostImg ? `style="background-image:url('${hostImg}')"` : ""}>${hostImg ? "" : escapeHtml((host.name || "?").charAt(0))}</div>
+               ${renderRibbon("HOST", gold, primary)}
+             </div>
+             <div class="host-role">${host.title ? escapeHtml(host.title) : ""}</div>
+             <div class="host-name">${escapeHtml(host.name || "")}</div>`
           : ""
       }
     </div>
