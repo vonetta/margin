@@ -51,6 +51,16 @@ router.post(
         return res.status(404).json({ error: "Ministry not found" });
       }
 
+      // Self-service registration has no invite flow yet, so anyone who
+      // knows a ministry_id can join it — but only the very first member
+      // may grant themselves elevated access. Everyone after that is
+      // added as "team" regardless of what they request; an existing
+      // admin/leader must promote them via PUT /api/people or similar.
+      const existingMemberCount = await User.countDocuments({
+        "ministries.ministry_id": ministry_id,
+      });
+      const assignedRole = existingMemberCount === 0 ? role || "admin" : "team";
+
       const hashedPassword = await bcrypt.hash(password, 12);
 
       let user = await User.findOne({ email });
@@ -62,14 +72,14 @@ router.post(
             .status(400)
             .json({ error: "Already a member of this ministry" });
         }
-        user.ministries.push({ ministry_id, role: role || "team" });
+        user.ministries.push({ ministry_id, role: assignedRole });
         await user.save();
       } else {
         user = await User.create({
           email,
           password: hashedPassword,
           name,
-          ministries: [{ ministry_id, role: role || "team" }],
+          ministries: [{ ministry_id, role: assignedRole }],
         });
       }
 
@@ -153,7 +163,27 @@ router.get("/me", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json(user);
+    const ministryIds = user.ministries.map((m) => m.ministry_id);
+    const ministries = await Ministry.find(
+      { ministry_id: { $in: ministryIds } },
+      "ministry_id name tagline parent_ministry_id",
+    );
+    const ministryById = new Map(
+      ministries.map((m) => [m.ministry_id, m]),
+    );
+
+    const userJson = user.toJSON();
+    userJson.ministries = userJson.ministries.map((m) => {
+      const ministry = ministryById.get(m.ministry_id);
+      return {
+        ...m,
+        name: ministry?.name || m.ministry_id,
+        tagline: ministry?.tagline,
+        parent_ministry_id: ministry?.parent_ministry_id || null,
+      };
+    });
+
+    res.json(userJson);
   } catch (error) {
     res.status(401).json({ error: "Invalid token" });
   }

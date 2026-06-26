@@ -1,18 +1,17 @@
 const request = require("supertest");
 const app = require("../../app");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const Ministry = require("../../models/Ministry");
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
-  await mongoose.connection.close();
 });
 
 afterEach(async () => {
-  await Ministry.deleteMany({});
+  await Ministry.deleteMany({ ministry_id: "ktm-tenant-test" });
 });
 
 describe("Tenant middleware", () => {
@@ -32,11 +31,13 @@ describe("Tenant middleware", () => {
 
   it("passes through when a valid ministry ID is provided", async () => {
     await Ministry.create({
-      ministry_id: "ktm",
+      ministry_id: "ktm-tenant-test",
       name: "Khy Traylor Global Ministries",
     });
 
-    const res = await request(app).get("/api/test").set("x-ministry-id", "ktm");
+    const res = await request(app)
+      .get("/api/test")
+      .set("x-ministry-id", "ktm-tenant-test");
 
     expect(res.status).not.toBe(400);
     expect(res.status).not.toBe(404);

@@ -1,5 +1,5 @@
 const request = require("supertest");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const AiProfile = require("../../models/AiProfile");
@@ -30,14 +30,13 @@ const testProfile = {
 let authToken;
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await AiProfile.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({ email: "profile-test@ktm.com" });
-  await mongoose.connection.close();
 });
 
 beforeEach(async () => {
@@ -113,6 +112,53 @@ describe("PUT /api/profile/voice", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.errors[0].msg).toBe("Tone pillars must be an array");
+  });
+});
+
+describe("PUT /api/profile/hashtags", () => {
+  it("updates brand and content hashtags", async () => {
+    const res = await request(app)
+      .put("/api/profile/hashtags")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ brand: ["#SaltAndLight"], content: ["#Community"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.brand).toEqual(["#SaltAndLight"]);
+    expect(res.body.content).toEqual(["#Community"]);
+  });
+
+  it("rejects a non-array brand value", async () => {
+    const res = await request(app)
+      .put("/api/profile/hashtags")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ brand: "#NotAnArray" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("PUT /api/profile/ctas", () => {
+  it("replaces the CTA map", async () => {
+    const res = await request(app)
+      .put("/api/profile/ctas")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ctas: { enrollment: "Join us today" } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.enrollment).toBe("Join us today");
+  });
+
+  it("rejects a non-object ctas value", async () => {
+    const res = await request(app)
+      .put("/api/profile/ctas")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ctas: "not an object" });
+
+    expect(res.status).toBe(400);
   });
 });
 

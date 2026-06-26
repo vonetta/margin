@@ -156,6 +156,7 @@ describe("buildFlyerHtml with people", () => {
 
   it("omits hero when no host provided", () => {
     const html = buildFlyerHtml(baseInput);
-    expect(html).not.toMatch(/<div class="hero"/);
+    expect(html).not.toContain('class="hero"');
+    expect(html).not.toContain("background-image:url");
   });
 });

@@ -1,10 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const { body, validationResult } = require("express-validator");
 const Person = require("../models/Person");
+const { body, validationResult } = require("express-validator");
 const { requireRole } = require("../middleware/auth");
-const { uploadFile, deleteFile } = require("../services/storageService");
+const { uploadFile, safeDeleteFile } = require("../services/storageService");
+const { removeBackground } = require("../services/imageService");
+const { whiteToTransparent } = require("../services/cutoutService");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -152,17 +154,12 @@ router.post(
         return res.status(404).json({ error: "Person not found" });
       }
 
-      // Delete old headshot if one exists
-      if (person.headshot_key) {
-        try {
-          await deleteFile(person.headshot_key);
-        } catch (e) {
-          // Non-fatal: log and continue
-          console.error("Failed to delete old headshot:", e.message);
-        }
-      }
+      // Clean up old files if replacing
+      if (person.headshot_key) await safeDeleteFile(person.headshot_key);
+      if (person.cutout_key) await safeDeleteFile(person.cutout_key);
 
-      const { key, url } = await uploadFile({
+      // 1. Store the original
+      const original = await uploadFile({
         ministryId: req.ministryId,
         category: "headshots",
         buffer: req.file.buffer,
@@ -170,11 +167,39 @@ router.post(
         originalName: req.file.originalname || person.name,
       });
 
-      person.headshot_url = url;
-      person.headshot_key = key;
+      person.headshot_url = original.url;
+      person.headshot_key = original.key;
+
+      // 2. Generate the transparent cut-out (Gemini white bg + flood-fill)
+      let cutoutResult = null;
+      try {
+        const whiteBg = await removeBackground(
+          req.file.buffer,
+          req.file.mimetype,
+        );
+        const cutout = await whiteToTransparent(whiteBg);
+        cutoutResult = await uploadFile({
+          ministryId: req.ministryId,
+          category: "cutouts",
+          buffer: cutout,
+          contentType: "image/png",
+          originalName: `${person.name}-cutout`,
+        });
+        person.cutout_url = cutoutResult.url;
+        person.cutout_key = cutoutResult.key;
+      } catch (e) {
+        // Non-fatal: if cut-out fails, we still have the original
+        console.error("Cut-out generation failed:", e.message);
+      }
+
       await person.save();
 
-      res.json({ headshot_url: url, person });
+      res.json({
+        headshot_url: person.headshot_url,
+        cutout_url: person.cutout_url,
+        cutout_ready: !!cutoutResult,
+        person,
+      });
     } catch (error) {
       console.error("Headshot upload error:", error);
       res.status(500).json({ error: "Failed to upload headshot" });
@@ -194,13 +219,8 @@ router.delete("/:id", requireRole("admin", "leader"), async (req, res) => {
       return res.status(404).json({ error: "Person not found" });
     }
 
-    if (person.headshot_key) {
-      try {
-        await deleteFile(person.headshot_key);
-      } catch (e) {
-        console.error("Failed to delete headshot:", e.message);
-      }
-    }
+    if (person.headshot_key) await safeDeleteFile(person.headshot_key);
+    if (person.cutout_key) await safeDeleteFile(person.cutout_key);
 
     await Person.deleteOne({ _id: person._id });
     res.json({ deleted: true, id: req.params.id });

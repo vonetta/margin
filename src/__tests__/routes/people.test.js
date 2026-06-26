@@ -4,10 +4,22 @@ jest.mock("../../services/storageService", () => ({
     url: "https://pub-test.r2.dev/ktm-test/headshots/test-abc123.jpg",
   }),
   deleteFile: jest.fn().mockResolvedValue({ deleted: true }),
+  safeDeleteFile: jest.fn().mockResolvedValue({ deleted: true }),
+}));
+
+jest.mock("../../services/imageService", () => ({
+  removeBackground: jest.fn().mockResolvedValue(Buffer.from("white-bg-image")),
+  MODEL_ID: "gemini-2.5-flash-image",
+}));
+
+jest.mock("../../services/cutoutService", () => ({
+  whiteToTransparent: jest
+    .fn()
+    .mockResolvedValue(Buffer.from("transparent-cutout")),
 }));
 
 const request = require("supertest");
-const mongoose = require("mongoose");
+const { connectTestDB } = require("../../testHelpers/db");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Person = require("../../models/Person");
@@ -23,7 +35,7 @@ let adminToken;
 let teamToken;
 
 beforeAll(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await connectTestDB();
 });
 
 afterAll(async () => {
@@ -32,7 +44,6 @@ afterAll(async () => {
   await User.deleteMany({
     email: { $in: ["people-admin@ktm.com", "people-team@ktm.com"] },
   });
-  await mongoose.connection.close();
 });
 
 beforeEach(async () => {

@@ -1,4 +1,27 @@
 const Anthropic = require("@anthropic-ai/sdk");
+const { STYLE_SCHEMA, validateStyle } = require("./layouts/styleSchema");
+
+// Build the finalize_caption tool's `style` property schema straight from
+// STYLE_SCHEMA so the two never drift apart — the AI's proposed values get
+// clamped by validateStyle() server-side regardless of what it picks, so
+// this is a hint to the model about the *shape*, not a trust boundary.
+const styleToolProperties = Object.fromEntries(
+  Object.entries(STYLE_SCHEMA).map(([key, def]) => [
+    key,
+    def.type === "number"
+      ? { type: "number", minimum: def.min, maximum: def.max }
+      : { type: "boolean" },
+  ]),
+);
+
+// AiProfile stores ctas/registers as Mongoose Maps. Object.entries() on a
+// real Mongoose Map returns its internal bookkeeping properties, not the
+// actual data, so iterate via .entries() for Maps and fall back to
+// Object.entries() for plain objects (e.g. in tests).
+const mapEntries = (value) =>
+  value instanceof Map
+    ? Array.from(value.entries())
+    : Object.entries(value || {});
 
 const buildSystemPrompt = (profile, ministry) => {
   const voiceProfile = profile.voice_profile;
@@ -11,7 +34,7 @@ const buildSystemPrompt = (profile, ministry) => {
   const brandHashtags = profile.hashtags.brand.join(" ");
   const contentHashtags = profile.hashtags.content.join(" ");
 
-  const ctas = Object.entries(profile.ctas || {})
+  const ctas = mapEntries(profile.ctas)
     .map(([key, value]) => `${key}: ${value}`)
     .join("\n");
 
@@ -25,11 +48,9 @@ const buildSystemPrompt = (profile, ministry) => {
     .map((r) => `${r.title}: ${r.content}`)
     .join("\n\n");
 
-  const registers = voiceProfile.registers
-    ? Object.entries(voiceProfile.registers)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join("\n")
-    : "";
+  const registers = mapEntries(voiceProfile.registers)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
 
   return `You are the official content generation assistant for ${ministry.name}. Your sole purpose is to generate captions, announcements, and social media content that sounds exactly like ${voiceProfile.persona_name} and no one else.
 
@@ -137,4 +158,172 @@ ${prompt}`;
   return message.content[0].text;
 };
 
-module.exports = { generateContent, buildSystemPrompt };
+const FINALIZE_TOOL = {
+  name: "finalize_caption",
+  description:
+    "Submit the final, complete piece of content once you have everything you need to write it accurately. This ends the conversation.",
+  input_schema: {
+    type: "object",
+    properties: {
+      caption: {
+        type: "string",
+        description: "The final content, fully written and ready to post.",
+      },
+      event: {
+        type: "object",
+        description:
+          "Structured event details mentioned anywhere in the conversation, so they can be reused to generate a matching flyer. Include this object whenever the content is about a specific event with a date, location, or similar — omit individual fields that were never mentioned. Omit the whole `event` object entirely for non-event content (a quote card, a general reflection, a recurring series with no single date). Pull description and theme_tags from the same well of detail you used to write the caption itself — the flyer should feel as substantive as the caption, not just the bare logistics.",
+        properties: {
+          title: { type: "string" },
+          subtitle: { type: "string" },
+          description: {
+            type: "string",
+            description:
+              "One short, evocative sentence capturing the heart/why of the event — pulled from the same voice and detail used in the caption's hook or body, not a repeat of the title. Omit if the caption doesn't have anything beyond logistics to draw from.",
+          },
+          theme_tags: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "2-4 short words or phrases naming the pillars/focus of the event (e.g. [\"Teaching\", \"Impartation\", \"Activation\"]), only if the conversation actually named distinct themes — don't invent generic ones just to fill this in.",
+          },
+          highlights: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "2-4 short value/benefit phrases elaborating on what's already known about the event (e.g. \"Hands-on prophetic activation\", \"Time for personal ministry\", \"Connect with other leaders\") — these are your own reasonable elaboration of the tone and substance already established in the conversation, not new facts. Never invent a specific date, price, location, speaker name, or other concrete claim that wasn't actually given. Omit entirely if you don't have enough real substance to elaborate on without just restating the title.",
+          },
+          audience: {
+            type: "string",
+            description:
+              "Who this is for, in a few words (e.g. \"Worship leaders, singers, and songwriters\"), if mentioned anywhere in the conversation.",
+          },
+          date: { type: "string" },
+          location: { type: "string" },
+          cost: { type: "string" },
+          cta: { type: "string" },
+          registration_url: { type: "string" },
+        },
+      },
+      style: {
+        type: "object",
+        description:
+          "Optional sizing/visibility hints for the matching flyer, based on how much content there actually is — e.g. a long title should get a smaller title_size, a rich description should get description_visible: true, a one-line title with nothing else can afford a larger title_size. Every value gets clamped to a safe range server-side regardless of what you pick, so use your judgment rather than always picking the same numbers. Omit entirely if you're not confident a particular value helps — the defaults are reasonable.",
+        properties: styleToolProperties,
+      },
+    },
+    required: ["caption"],
+  },
+};
+
+const SWITCH_MINISTRY_TOOL = {
+  name: "switch_ministry",
+  description:
+    "Call this once the user has confirmed the content actually belongs to a different ministry you have access to, instead of the one currently active. This hands off to that ministry's own voice, branding, and hashtags — do not write or finalize any caption on this turn, the conversation will continue under the correct ministry afterward.",
+  input_schema: {
+    type: "object",
+    properties: {
+      ministry_id: {
+        type: "string",
+        description: "The ministry_id of the other ministry to switch to.",
+      },
+      note: {
+        type: "string",
+        description:
+          "One short sentence confirming the switch, shown to the user (e.g. \"Got it — continuing this under Salt & Light.\").",
+      },
+    },
+    required: ["ministry_id", "note"],
+  },
+};
+
+const buildChatSystemPrompt = (
+  profile,
+  ministry,
+  platform,
+  availableMinistries = [],
+) => {
+  const siblings = availableMinistries.filter(
+    (m) => m.ministry_id !== ministry.ministry_id,
+  );
+  const siblingSection = siblings.length
+    ? `\n\nOTHER MINISTRIES YOU HAVE ACCESS TO\n\nThe person you're talking to also has access to: ${siblings
+        .map((m) => `${m.name} (ministry_id: "${m.ministry_id}")`)
+        .join(", ")}. You are already in ${ministry.name}'s workspace — that's who this content is for by default. Only raise the question of whether it actually belongs to one of these other ministries instead if the conversation itself gives you an actual reason to think so (the user names the other ministry, mentions co-hosting/partnering with them, or a detail like a registration link/venue/brand clearly points to them). Sibling access existing is not, by itself, a reason to ask — most events in this conversation belong to ${ministry.name} and should be finalized as such without a confirmation detour. If you do have a real signal of ambiguity, ask the user to confirm which one — don't guess — then call the switch_ministry tool with that ministry_id instead of writing the caption yourself; you don't have that ministry's voice profile loaded, so anything you wrote here would be in the wrong voice.`
+    : "";
+
+  return `${buildSystemPrompt(profile, ministry)}
+
+CONVERSATIONAL MODE
+
+You are now in a back-and-forth conversation with a ministry team member who wants content created for ${platform}. You will often not have everything you need on the first message. Some messages will describe a flyer that's already been made (sometimes as an extracted summary of an uploaded image) — treat those facts as already known and don't ask the user to repeat them.
+
+If you are missing information that would materially change what you write, ask exactly ONE short, specific question per turn. Do not ask more than one question at a time, and do not call the finalize_caption tool on a turn where you ask a question. Reasons to ask:
+- The event is co-hosted, partnered, or otherwise doesn't cleanly belong to ${ministry.name} — ask directly whether this is a partnered event and how it should be framed. A partnered event can still be written in this ministry's voice once you know who else is involved. Don't refuse to write it just because it doesn't fit neatly.
+- The audience, spiritual framing/series tie-in, cost, registration link, or location is needed for this platform and hasn't been given.${siblingSection}
+
+"Do not invent event details" above means facts — date, location, cost, who's speaking, registration link. It does NOT mean the title. Writing a strong title/subtitle when the user hasn't supplied one is your job, the same way writing the caption itself is — propose one that fits the event and this ministry's voice rather than asking the user to come up with it themselves or refusing to finalize without one.
+
+Once you have enough to write complete, accurate content for ${ministry.name}, call the finalize_caption tool with the final content as the only output for that turn — no text alongside it. Always include the \`event\` object in that call when the content is about a specific event, with whatever structured fields (title, date, location, cost, cta, registration_url) were mentioned, so a matching flyer can be generated from the same facts without asking the user to retype them. A flyer with just bare logistics looks empty — also include description, theme_tags, and highlights whenever there's enough real substance in the conversation to draw from, so the flyer feels as complete as the caption. Never use highlights or description to invent a fact that wasn't actually given.`;
+};
+
+const chatTurn = async ({
+  profile,
+  ministry,
+  platform,
+  messages,
+  availableMinistries = [],
+}) => {
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+
+  const tools = [FINALIZE_TOOL];
+  if (availableMinistries.some((m) => m.ministry_id !== ministry.ministry_id)) {
+    tools.push(SWITCH_MINISTRY_TOOL);
+  }
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    system: buildChatSystemPrompt(profile, ministry, platform, availableMinistries),
+    tools,
+    messages,
+  });
+
+  const switchUse = response.content.find(
+    (block) => block.type === "tool_use" && block.name === "switch_ministry",
+  );
+  if (switchUse) {
+    return {
+      done: false,
+      switchTo: {
+        ministry_id: switchUse.input.ministry_id,
+        note: switchUse.input.note,
+      },
+      message: switchUse.input.note,
+    };
+  }
+
+  const toolUse = response.content.find(
+    (block) => block.type === "tool_use" && block.name === "finalize_caption",
+  );
+  if (toolUse) {
+    return {
+      done: true,
+      caption: toolUse.input.caption,
+      event: toolUse.input.event || null,
+      style: validateStyle(toolUse.input.style),
+    };
+  }
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  return { done: false, message: textBlock ? textBlock.text : "" };
+};
+
+module.exports = {
+  generateContent,
+  buildSystemPrompt,
+  chatTurn,
+  buildChatSystemPrompt,
+};

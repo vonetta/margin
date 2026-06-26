@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "margin-app",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/vonettastevenson/Documents/margin-app && npm start"],
+      "port": 3000
+    }
+  ]
+}

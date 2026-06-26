@@ -3,16 +3,21 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "test": "NODE_ENV=test jest --runInBand --watchAll --no-coverage",
+    "test": "NODE_ENV=test jest --runInBand --no-coverage --forceExit",
+    "test:watch": "NODE_ENV=test jest --runInBand --watchAll --no-coverage --forceExit",
     "seed": "node src/config/seed.js",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "NODE_ENV=test jest --runInBand --coverage --forceExit"
   },
   "jest": {
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/__tests__/**/*.test.js"
+    "globalSetup": "./jest.globalSetup.js",
+    "moduleNameMapper": {
+      "flyerRenderer\\.js$": "<rootDir>/src/__mocks__/flyerRenderer.js",
+      "flyerRenderer$": "<rootDir>/src/__mocks__/flyerRenderer.js"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(puppeteer|puppeteer-core)/)"
     ]
   },
   "author": "",
@@ -21,6 +26,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
     "@aws-sdk/client-s3": "^3.1073.0",
+    "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -33,7 +39,8 @@
     "multer": "^2.2.0",
     "nodemon": "^3.1.14",
     "puppeteer": "^25.1.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.2"
   },
   "devDependencies": {
     "jest": "^30.4.2",
