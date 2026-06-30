@@ -125,8 +125,8 @@ const render = ({
     .sp-photo { width: 140px; height: 168px; flex-shrink: 0; border-radius: 12px; background-size: cover; background-position: center top; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
     .sp-empty { display: flex; align-items: center; justify-content: center; background: ${hexToRgba(gold, 0.25)}; color: #fff; font-size: 50px; font-family: '${display}', serif; }
     .ribbon { display: inline-block; padding: 4px 12px; border-radius: 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
-    .sp-pre { font-family: '${accentFont}', cursive; font-size: 24px; color: ${gold}; line-height: 0.9; }
-    .sp-name { font-family: '${display}', serif; font-size: 28px; font-weight: 700; color: #fff; margin-top: 2px; }
+    .sp-pre { font-family: '${accentFont}', cursive; font-size: 24px; color: ${gold}; line-height: 0.9; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+    .sp-name { font-family: '${display}', serif; font-size: 28px; font-weight: 700; color: #fff; margin-top: 2px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
     .pills { display: flex; gap: 14px; padding-top: 24px; border-top: 1px solid ${hexToRgba(gold, 0.3)}; flex-wrap: wrap; }
     .pill { flex: 1; min-width: 140px; border: 2px solid; border-radius: 10px; padding: 10px 16px; }
     .pill-label { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
