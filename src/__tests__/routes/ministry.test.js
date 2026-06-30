@@ -33,6 +33,8 @@ const testMinistry = {
 
 let authToken;
 let teamToken;
+let teamUserId;
+let authUserId;
 
 beforeAll(async () => {
   await connectTestDB();
@@ -80,8 +82,10 @@ beforeEach(async () => {
     role: "team",
   });
   teamToken = teamRes.body.token;
+  teamUserId = teamRes.body.user.id;
 
   authToken = res.body.token;
+  authUserId = res.body.user.id;
 });
 
 describe("GET /api/ministry", () => {
@@ -265,6 +269,84 @@ describe("GET /api/ministry/team", () => {
       .set("x-ministry-id", "ktm-test")
       .set("Authorization", `Bearer ${teamToken}`);
     expect(res.status).toBe(403);
+  });
+});
+
+describe("PUT /api/ministry/team/:userId", () => {
+  it("promotes a team member to leader", async () => {
+    const res = await request(app)
+      .put(`/api/ministry/team/${teamUserId}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ role: "leader" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe("leader");
+
+    const team = await request(app)
+      .get("/api/ministry/team")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+    expect(team.body.find((u) => u._id === teamUserId).role).toBe("leader");
+  });
+
+  it("rejects a non-admin (leader) trying to change a role", async () => {
+    await request(app)
+      .put(`/api/ministry/team/${teamUserId}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ role: "leader" });
+
+    const res = await request(app)
+      .put(`/api/ministry/team/${authUserId}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({ role: "admin" });
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses to demote the last remaining admin", async () => {
+    const res = await request(app)
+      .put(`/api/ministry/team/${authUserId}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ role: "team" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/last admin/);
+  });
+
+  it("allows demoting an admin once a second admin exists", async () => {
+    await request(app)
+      .put(`/api/ministry/team/${teamUserId}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ role: "admin" });
+
+    const res = await request(app)
+      .put(`/api/ministry/team/${authUserId}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ role: "team" });
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe("team");
+  });
+
+  it("rejects an invalid role", async () => {
+    const res = await request(app)
+      .put(`/api/ministry/team/${teamUserId}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ role: "superadmin" });
+    expect(res.status).toBe(400);
+  });
+
+  it("404s for a user who isn't a member of this ministry", async () => {
+    const res = await request(app)
+      .put("/api/ministry/team/000000000000000000000000")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ role: "leader" });
+    expect(res.status).toBe(404);
   });
 });
 

@@ -190,6 +190,59 @@ router.get("/team", requireRole("admin", "leader"), async (req, res) => {
   }
 });
 
+// PUT /api/ministry/team/:userId — change an existing team member's role
+// within this ministry. Admin-only (a leader can see the roster but
+// shouldn't be able to grant themselves or others admin). Refuses to
+// demote the last remaining admin — otherwise a ministry could end up
+// with no one able to manage it, including the person making the change.
+router.put(
+  "/team/:userId",
+  requireRole("admin"),
+  [
+    body("role")
+      .isIn(["admin", "leader", "team"])
+      .withMessage("Invalid role"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const target = await User.findOne({
+        _id: req.params.userId,
+        "ministries.ministry_id": req.ministryId,
+      });
+      if (!target) {
+        return res.status(404).json({ error: "Team member not found in this ministry" });
+      }
+
+      const membership = target.getMembership(req.ministryId);
+      if (membership.role === "admin" && req.body.role !== "admin") {
+        const adminCount = await User.countDocuments({
+          "ministries.ministry_id": req.ministryId,
+          "ministries.role": "admin",
+        });
+        if (adminCount <= 1) {
+          return res.status(400).json({
+            error: "Can't remove the last admin — promote someone else first",
+          });
+        }
+      }
+
+      membership.role = req.body.role;
+      await target.save();
+
+      res.json({
+        _id: target._id,
+        name: target.name,
+        email: target.email,
+        role: req.body.role,
+      });
+    } catch (error) {
+      console.error("Team role update error:", error);
+      res.status(500).json({ error: "Failed to update team member role" });
+    }
+  },
+);
+
 // GET /api/ministry/sub-ministries
 // List ministries linked under the current one. This is visibility only —
 // being able to see that a sub-ministry exists does not grant access to
