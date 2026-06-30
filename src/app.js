@@ -14,6 +14,8 @@ const peopleRoutes = require("./routes/people");
 const backgroundRoutes = require("./routes/backgrounds");
 const flyerRoutes = require("./routes/flyers");
 const communicationsRoutes = require("./routes/communications");
+const eventRoutes = require("./routes/events");
+const publicCalendarRoutes = require("./routes/publicCalendar");
 dotenv.config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
 });
@@ -59,6 +61,11 @@ app.get("/health", (req, res) => {
 // Auth routes — public, no tenant or auth middleware
 app.use("/api/auth", authRoutes);
 
+// Public calendar feed — no auth, no tenant middleware. The ministry is
+// identified by the URL itself (/:ministry_id.ics), the way a WordPress
+// calendar plugin or any external calendar app subscribes to it.
+app.use("/api/public/calendar", publicCalendarRoutes);
+
 // All routes below require tenant and auth middleware
 app.use("/api", tenantMiddleware);
 app.use("/api", authMiddleware);
@@ -70,6 +77,7 @@ app.use("/api/profile", aiProfileRoutes);
 app.use("/api/content", contentRoutes);
 app.use("/api/people", peopleRoutes);
 app.use("/api/communications", communicationsRoutes);
+app.use("/api/events", eventRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });

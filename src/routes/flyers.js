@@ -15,6 +15,8 @@ const {
 } = require("../services/backgroundSelector");
 const { generateBackground } = require("../services/imageService");
 const Background = require("../models/Background");
+const Event = require("../models/Event");
+const { parseFlyerDate } = require("../services/calendarService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -224,6 +226,30 @@ router.post(
         qr_url: qr_url || null,
         created_by: req.userId,
       });
+
+      // Best-effort: get the event onto the calendar as something a human
+      // confirms, rather than requiring it be entered a second time by
+      // hand. A date that fails to parse just means no calendar entry —
+      // it never blocks the flyer itself from being created.
+      const parsedDate = parseFlyerDate(date);
+      if (parsedDate) {
+        try {
+          await Event.create({
+            ministry_id: req.ministryId,
+            title,
+            description: description || undefined,
+            location: location || undefined,
+            start: parsedDate.start,
+            end: parsedDate.end || undefined,
+            status: "pending",
+            source: "flyer",
+            flyer_id: flyer._id.toString(),
+            created_by: req.userId,
+          });
+        } catch (eventError) {
+          console.error("Auto calendar event creation failed:", eventError);
+        }
+      }
 
       res.status(201).json(flyer);
     } catch (error) {

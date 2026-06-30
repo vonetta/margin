@@ -30,6 +30,7 @@ const Flyer = require("../../models/Flyer");
 const Person = require("../../models/Person");
 const User = require("../../models/User");
 const Background = require("../../models/Background");
+const Event = require("../../models/Event");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -48,6 +49,7 @@ afterAll(async () => {
   await Flyer.deleteMany({ ministry_id: "ktm-test" });
   await Person.deleteMany({ ministry_id: "ktm-test" });
   await Background.deleteMany({ ministry_id: "ktm-test" });
+  await Event.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -58,6 +60,7 @@ beforeEach(async () => {
   await Flyer.deleteMany({ ministry_id: "ktm-test" });
   await Person.deleteMany({ ministry_id: "ktm-test" });
   await Background.deleteMany({ ministry_id: "ktm-test" });
+  await Event.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -132,6 +135,37 @@ describe("POST /api/flyers/generate", () => {
     expect(res.body.content.description).toBe("Step into the supernatural.");
     expect(res.body.content.theme_tags).toEqual(["Teaching", "Impartation"]);
     expect(res.body.content.audience).toBe("Leaders and prophetic voices");
+  });
+
+  it("auto-creates a pending calendar event when the date parses", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Worship Intensive",
+        date: "August 15, 2026, 10AM - 4PM",
+        location: "1234 Los Angeles, CA",
+      });
+
+    expect(res.status).toBe(201);
+    const event = await Event.findOne({ ministry_id: "ktm-test", flyer_id: res.body._id });
+    expect(event).toBeTruthy();
+    expect(event.status).toBe("pending");
+    expect(event.source).toBe("flyer");
+    expect(event.title).toBe("Worship Intensive");
+  });
+
+  it("doesn't create a calendar event when the date doesn't parse, and doesn't fail the flyer", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "No Date Flyer" });
+
+    expect(res.status).toBe(201);
+    const event = await Event.findOne({ ministry_id: "ktm-test", flyer_id: res.body._id });
+    expect(event).toBeNull();
   });
 
   it("clamps an out-of-range style value before passing it to the renderer", async () => {
