@@ -13,6 +13,7 @@ const contentRoutes = require("./routes/content");
 const peopleRoutes = require("./routes/people");
 const backgroundRoutes = require("./routes/backgrounds");
 const flyerRoutes = require("./routes/flyers");
+const communicationsRoutes = require("./routes/communications");
 dotenv.config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
 });
@@ -68,6 +69,7 @@ app.use("/api/ministry", ministryRoutes);
 app.use("/api/profile", aiProfileRoutes);
 app.use("/api/content", contentRoutes);
 app.use("/api/people", peopleRoutes);
+app.use("/api/communications", communicationsRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });
