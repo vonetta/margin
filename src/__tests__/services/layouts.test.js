@@ -237,6 +237,20 @@ describe("suggestLayout", () => {
     expect(html).toContain("justify-content: center;");
   });
 
+  it("lays out feature's meta pills as a 2-column grid, not a tall single column that can clip off the canvas", () => {
+    const html = renderLayout("feature", {
+      content: {
+        title: "Test Event",
+        date: "August 15",
+        location: "Los Angeles",
+        cost: "$75",
+        audience: "Worship leaders",
+      },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+    });
+    expect(html).toContain("grid-template-columns: repeat(2, 1fr)");
+  });
+
   it("lists all four layouts", () => {
     const layouts = listLayouts();
     expect(layouts.length).toBe(4);

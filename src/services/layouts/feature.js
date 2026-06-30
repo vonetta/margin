@@ -99,19 +99,19 @@ const render = ({
     .photo-corner-logo { position: absolute; top: 20px; right: 20px; z-index: 4; }
     .hero-photo { position: absolute; right: 0; bottom: 0; width: 62%; height: 88%; background-image: url('${hostImg || ""}'); background-size: cover; background-position: center top; }
     .scrim { position: absolute; inset: 0; background: linear-gradient(90deg, ${primary} 30%, ${hexToRgba(primary, 0.5)} 55%, ${hexToRgba(primary, 0)} 75%); }
-    .content { position: relative; z-index: 3; padding: 56px 60px; height: 100%; display: flex; flex-direction: column; width: 64%; }
+    .content { position: relative; z-index: 3; padding: 44px 56px; height: 100%; display: flex; flex-direction: column; width: 64%; }
     .top-bar { margin-bottom: 24px; }
     .top-bar-center { text-align: center; }
     .kicker { font-family: '${accentFont}', cursive; font-size: 52px; color: ${gold}; line-height: 0.9; }
     .title { font-family: '${display}', serif; font-weight: 700; font-size: ${s.title_size}px; line-height: 0.98; color: #fff; margin-top: 8px; text-shadow: 0 4px 30px rgba(0,0,0,0.55); }
     .subtitle { font-size: ${s.subtitle_size}px; line-height: 1.45; color: rgba(255,255,255,0.92); margin-top: 22px; max-width: 440px; font-style: italic; }
-    .tag-row { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; }
+    .tag-row { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
     .tag-pill { display: inline-block; padding: 6px 16px; border-radius: 20px; border: 1.5px solid rgba(255,255,255,0.6); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
     .desc { font-size: ${s.description_size}px; line-height: 1.5; color: rgba(255,255,255,0.85); font-style: italic; margin-top: 16px; max-width: 440px; }
-    .highlights { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+    .highlights { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
     .highlight-item { font-size: 16px; color: #fff; font-weight: 500; }
     .highlight-mark { color: ${gold}; font-weight: 700; }
-    .who { margin-top: 30px; }
+    .who { margin-top: 18px; }
     .ribbon { display: inline-block; padding: 5px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
     .who-name { font-family: '${display}', serif; font-size: 46px; font-weight: 700; color: #fff; }
     .who-title { font-size: 21px; color: ${gold}; margin-top: 2px; }
@@ -120,10 +120,10 @@ const render = ({
     ${footerLogoNeedsInvert ? ".footer-logo .logo { filter: brightness(0) invert(1); }" : ""}
     .footer-logo { margin-bottom: 16px; }
     .cta { display: inline-block; font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.9)}px; font-weight: 700; color: ${gold}; text-transform: uppercase; margin-bottom: 16px; background: rgba(0,0,0,0.4); padding: 10px 18px; border-radius: 8px; }
-    .pills { display: flex; flex-direction: column; gap: 10px; max-width: 380px; }
-    .pill { border: 2px solid; border-radius: 10px; padding: 9px 16px; }
-    .pill-label { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-    .pill-value { font-size: 21px; font-weight: 600; margin-top: 1px; }
+    .pills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px; max-width: 420px; }
+    .pill { border: 2px solid; border-radius: 10px; padding: 7px 14px; }
+    .pill-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+    .pill-value { font-size: 17px; font-weight: 600; margin-top: 1px; }
     .qr-slot { text-align: center; }
     .qr-img { width: 130px; height: 130px; background: #fff; padding: 8px; border-radius: 8px; }
     .qr-caption { font-size: 15px; color: rgba(255,255,255,0.85); margin-top: 6px; }
