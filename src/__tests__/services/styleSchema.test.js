@@ -47,11 +47,11 @@ describe("validateStyle", () => {
   });
 
   it("accepts a valid enum value", () => {
-    expect(validateStyle({ logo_placement: "footer" }).logo_placement).toBe(
-      "footer",
-    );
-    expect(validateStyle({ color_variant: "warm" }).color_variant).toBe(
-      "warm",
+    expect(
+      validateStyle({ logo_placement: "footer-right" }).logo_placement,
+    ).toBe("footer-right");
+    expect(validateStyle({ color_variant: "triad" }).color_variant).toBe(
+      "triad",
     );
   });
 

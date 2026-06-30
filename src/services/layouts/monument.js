@@ -80,15 +80,35 @@ const render = ({
   const body = s.body_font || resolvedFonts.body;
   const accentFont = s.accent_font || resolvedFonts.accent;
 
-  const logo = renderLogo(branding.logo_url, s.logo_size);
+  // An optional solid backing shape behind the logo so it has guaranteed
+  // contrast regardless of what's underneath it (a busy photo, a bold
+  // gradient, the dark footer) — independent of where it's placed.
+  const logoRaw = renderLogo(branding.logo_url, s.logo_size);
+  const logo =
+    logoRaw && s.logo_backing !== "none"
+      ? `<span class="logo-backing logo-backing-${s.logo_backing}">${logoRaw}</span>`
+      : logoRaw;
+
   const logoInContent =
-    logo && s.logo_placement !== "footer"
+    logo && (s.logo_placement === "top-left" || s.logo_placement === "top-center")
       ? `<div class="top-bar${s.logo_placement === "top-center" ? " top-bar-center" : ""}">${logo}</div>`
       : "";
-  const logoInFooter =
-    logo && s.logo_placement === "footer"
+  const logoInPhotoCorner =
+    logo && s.logo_placement === "photo-corner"
+      ? `<div class="photo-corner-logo">${logo}</div>`
+      : "";
+  const logoInFooterLeft =
+    logo && s.logo_placement === "footer-left"
       ? `<div class="footer-logo">${logo}</div>`
       : "";
+  const logoInFooterRight =
+    logo && s.logo_placement === "footer-right"
+      ? `<div class="footer-logo">${logo}</div>`
+      : "";
+  // Inverting to white only makes sense on the dark footer when there's no
+  // backing shape already providing contrast — inverted-white-on-white
+  // would erase the logo entirely.
+  const footerLogoNeedsInvert = s.logo_backing === "none";
 
   // The background (photo or brand gradient) spans the FULL top-zone
   // canvas rather than being confined to a narrow side panel — a hard
@@ -101,7 +121,7 @@ const render = ({
   // flat, empty color when there's no real photo to fill the space.
   const photoZoneBg = backgroundUrl
     ? `background-image: linear-gradient(${hexToRgba(primary, 0.3)}, ${hexToRgba(primary, 0.5)}), url('${backgroundUrl}'); background-size: cover; background-position: center;`
-    : `background-image: ${abstractLinesOverlay("#ffffff", 0.16)}, ${brandGradient({ primary, accent, gold }, 165)}; background-size: cover, cover;`;
+    : `background-image: ${abstractLinesOverlay("#ffffff", 0.16)}, ${brandGradient({ primary, accent, gold }, s.gradient_angle)}; background-size: cover, cover;`;
 
   const speakerCards = speakers
     .map((s) => {
@@ -168,6 +188,10 @@ const render = ({
     .content { position: relative; z-index: 2; padding: 48px 48px 36px; width: 50%; }
     .top-bar { margin-bottom: 26px; }
     .top-bar-center { text-align: center; }
+    .logo-backing { display: inline-flex; align-items: center; justify-content: center; }
+    .logo-backing-circle { background: #fff; border-radius: 50%; padding: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+    .logo-backing-pill { background: #fff; border-radius: 999px; padding: 10px 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+    .photo-corner-logo { position: absolute; top: 20px; right: 20px; z-index: 3; }
     .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
     .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${accent}; line-height: 1; margin-top: 8px; }
     .desc { font-size: ${s.description_size}px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
@@ -197,7 +221,8 @@ const render = ({
     .meta-divider { width: 1px; height: 30px; background: ${hexToRgba(primary, 0.2)}; }
     .footer { flex: 0 0 auto; background: ${primary}; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 36px 56px; border-top: 4px solid ${gold}; }
     .footer-left { display: flex; flex-direction: column; gap: 14px; }
-    .footer-logo .logo { filter: brightness(0) invert(1); }
+    .footer-right { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
+    ${footerLogoNeedsInvert ? ".footer-logo .logo { filter: brightness(0) invert(1); }" : ""}
     .cta { font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.82)}px; font-weight: 800; color: ${gold}; text-transform: uppercase; line-height: 1.3; max-width: 70%; }
     .qr-slot { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
     .qr-img { width: 148px; height: 148px; background: #fff; padding: 9px; border-radius: 8px; }
@@ -221,6 +246,7 @@ const render = ({
           : ""
       }
     </div>
+    ${logoInPhotoCorner}
     <div class="content">
       ${logoInContent}
       <div class="title">${title}</div>
@@ -236,10 +262,13 @@ const render = ({
   </div>
   <div class="footer">
     <div class="footer-left">
-      ${logoInFooter}
+      ${logoInFooterLeft}
       ${cta ? `<div class="cta">${cta}</div>` : ""}
     </div>
-    ${qrBlock}
+    <div class="footer-right">
+      ${logoInFooterRight}
+      ${qrBlock}
+    </div>
   </div>
 </body></html>`;
 };

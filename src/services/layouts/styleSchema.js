@@ -16,14 +16,31 @@ const STYLE_SCHEMA = {
   logo_size: { type: "number", min: 40, max: 140, default: 84 },
   logo_placement: {
     type: "enum",
-    options: ["top-left", "top-center", "footer"],
+    options: [
+      "top-left",
+      "top-center",
+      "photo-corner",
+      "footer-left",
+      "footer-right",
+    ],
     default: "top-left",
+  },
+  // A plain logo can disappear against a busy photo or a bold gradient —
+  // an optional solid backing shape gives it a guaranteed-contrast surface
+  // to sit on, independent of whatever's behind it.
+  logo_backing: {
+    type: "enum",
+    options: ["none", "circle", "pill"],
+    default: "none",
   },
   color_variant: {
     type: "enum",
-    options: ["brand", "warm", "cool", "accent_swap"],
+    options: ["brand", "triad", "complementary", "accent_swap"],
     default: "brand",
   },
+  // The gradient fallback's direction in degrees (CSS linear-gradient
+  // angle) — 0 is bottom-to-top, 90 is left-to-right, etc.
+  gradient_angle: { type: "number", min: 0, max: 360, default: 165 },
   // Free-form rather than validated against a fixed list: the wizard only
   // ever sends one of the ministry's own curated type_system fonts, so
   // there's nothing meaningful to clamp against here. An unrecognized name

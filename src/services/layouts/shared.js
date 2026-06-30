@@ -87,41 +87,50 @@ const hslToHex = ({ h, s, l }) => {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
 
-// Rotate a hex color's hue by N degrees, keeping its saturation/lightness.
-const rotateHue = (hex, degrees) => {
+// Re-hue a color to a specific target hue while keeping its OWN saturation
+// and lightness — used so a derived accent/gold stays exactly as vivid as
+// the ministry's actual accent/gold, instead of inheriting primary's much
+// darker, more muted tone.
+const rehueTo = (hex, targetHue) => {
   const hsl = hexToHsl(hex);
-  return hslToHex({ ...hsl, h: (hsl.h + degrees + 360) % 360 });
+  return hslToHex({ ...hsl, h: ((targetHue % 360) + 360) % 360 });
 };
 
 // Derive a handful of "on-brand but not identical" palette variants from a
 // ministry's actual brand colors, instead of opening color choice up to
 // anything — every variant is mathematically derived from the same source
 // colors, so it can't drift off-brand no matter which one gets picked.
+// primary deliberately never moves in any variant — every layout assumes
+// primary is the dark, high-contrast anchor (body text, footer background),
+// so reassigning it to a much lighter derived color breaks legibility
+// regardless of which ministry's palette this runs on.
 const deriveColorVariants = (colors) => {
   const { primary, accent, gold, bg, text } = colors;
+  const primaryHue = hexToHsl(primary).h;
   return {
     brand: { primary, accent, gold, bg, text },
-    warm: {
+    // True triadic harmony: accent and gold land 120°/240° around the
+    // color wheel from primary, each keeping its own saturation/lightness
+    // so they still read as vivid accent colors, not muted primary clones.
+    triad: {
       primary,
-      accent: rotateHue(accent, 18),
-      gold: rotateHue(gold, 10),
+      accent: rehueTo(accent, primaryHue + 120),
+      gold: rehueTo(gold, primaryHue + 240),
       bg,
       text,
     },
-    cool: {
-      primary: rotateHue(primary, -15),
-      accent: rotateHue(accent, -15),
-      gold,
+    // Split-complementary: one color sits directly opposite primary on the
+    // wheel, the other 30° off that — a bolder, higher-contrast pairing
+    // than triad without the two accent colors fighting each other.
+    complementary: {
+      primary,
+      accent: rehueTo(accent, primaryHue + 180),
+      gold: rehueTo(gold, primaryHue + 150),
       bg,
       text,
     },
-    // Swaps which of the two highlight colors carries more visual weight.
-    // primary deliberately never moves here — every layout assumes primary
-    // is the dark, high-contrast anchor (body text, footer background), so
-    // reassigning it to a much lighter color like gold breaks legibility
-    // regardless of which ministry's palette this runs on. Swapping
-    // accent/gold instead still gives a genuinely different feel using the
-    // same three colors, without that risk.
+    // Swaps which of the two highlight colors carries more visual weight,
+    // using the exact same two colors rather than deriving new ones.
     accent_swap: { primary, accent: gold, gold: accent, bg, text },
   };
 };
@@ -195,5 +204,4 @@ module.exports = {
   renderLogo,
   abstractLinesOverlay,
   deriveColorVariants,
-  rotateHue,
 };
