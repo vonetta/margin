@@ -4,6 +4,7 @@ const { body, query, validationResult } = require("express-validator");
 const Task = require("../models/Task");
 const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
+const { notifyTaskAssigned } = require("../services/notificationService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -81,6 +82,7 @@ router.post(
         assigned_to,
         assigned_by: req.userId.toString(),
       });
+      await notifyTaskAssigned({ ministryId: req.ministryId, task });
       res.status(201).json(task);
     } catch (error) {
       console.error("Task creation error:", error);
@@ -129,8 +131,12 @@ router.put(
       const updates = { ...req.body };
       if (updates.due_date) updates.due_date = new Date(updates.due_date);
 
+      const reassigned = updates.assigned_to && updates.assigned_to !== task.assigned_to;
       Object.assign(task, updates);
       await task.save();
+      if (reassigned) {
+        await notifyTaskAssigned({ ministryId: req.ministryId, task });
+      }
       res.json(task);
     } catch (error) {
       console.error("Task update error:", error);

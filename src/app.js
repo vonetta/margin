@@ -17,6 +17,7 @@ const communicationsRoutes = require("./routes/communications");
 const eventRoutes = require("./routes/events");
 const publicCalendarRoutes = require("./routes/publicCalendar");
 const taskRoutes = require("./routes/tasks");
+const notificationRoutes = require("./routes/notifications");
 dotenv.config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
 });
@@ -80,6 +81,7 @@ app.use("/api/people", peopleRoutes);
 app.use("/api/communications", communicationsRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });

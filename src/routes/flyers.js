@@ -17,6 +17,7 @@ const { generateBackground } = require("../services/imageService");
 const Background = require("../models/Background");
 const Event = require("../models/Event");
 const { parseFlyerDate } = require("../services/calendarService");
+const { notifyEventPendingApproval } = require("../services/notificationService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -234,7 +235,7 @@ router.post(
       const parsedDate = parseFlyerDate(date);
       if (parsedDate) {
         try {
-          await Event.create({
+          const pendingEvent = await Event.create({
             ministry_id: req.ministryId,
             title,
             description: description || undefined,
@@ -246,6 +247,7 @@ router.post(
             flyer_id: flyer._id.toString(),
             created_by: req.userId,
           });
+          await notifyEventPendingApproval({ ministryId: req.ministryId, event: pendingEvent });
         } catch (eventError) {
           console.error("Auto calendar event creation failed:", eventError);
         }

@@ -4,6 +4,7 @@ const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Task = require("../../models/Task");
 const User = require("../../models/User");
+const Notification = require("../../models/Notification");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -20,6 +21,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Ministry.deleteMany({ ministry_id: { $in: ["ktm-test", "other-ministry-test"] } });
   await Task.deleteMany({ ministry_id: "ktm-test" });
+  await Notification.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: {
       $in: [
@@ -35,6 +37,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await Ministry.deleteMany({ ministry_id: { $in: ["ktm-test", "other-ministry-test"] } });
   await Task.deleteMany({ ministry_id: "ktm-test" });
+  await Notification.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: {
       $in: [
@@ -108,6 +111,18 @@ describe("POST /api/tasks", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ title: "Should fail", assigned_to: outsiderId });
     expect(res.status).toBe(400);
+  });
+
+  it("creates a notification for the assignee", async () => {
+    await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Confirm worship setlist", assigned_to: teamAId });
+
+    const notifications = await Notification.find({ ministry_id: "ktm-test", user_id: teamAId });
+    expect(notifications.length).toBe(1);
+    expect(notifications[0].type).toBe("task_assigned");
   });
 
   it("requires a title", async () => {

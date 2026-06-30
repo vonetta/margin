@@ -31,6 +31,7 @@ const Person = require("../../models/Person");
 const User = require("../../models/User");
 const Background = require("../../models/Background");
 const Event = require("../../models/Event");
+const Notification = require("../../models/Notification");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -50,6 +51,7 @@ afterAll(async () => {
   await Person.deleteMany({ ministry_id: "ktm-test" });
   await Background.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
+  await Notification.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -61,6 +63,7 @@ beforeEach(async () => {
   await Person.deleteMany({ ministry_id: "ktm-test" });
   await Background.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
+  await Notification.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -154,6 +157,22 @@ describe("POST /api/flyers/generate", () => {
     expect(event.status).toBe("pending");
     expect(event.source).toBe("flyer");
     expect(event.title).toBe("Worship Intensive");
+  });
+
+  it("notifies the ministry's admin about the pending calendar event", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Worship Intensive",
+        date: "August 15, 2026, 10AM - 4PM",
+      });
+
+    expect(res.status).toBe(201);
+    const notifications = await Notification.find({ ministry_id: "ktm-test", type: "event_pending_approval" });
+    expect(notifications.length).toBe(1);
+    expect(notifications[0].body).toBe("Worship Intensive");
   });
 
   it("doesn't create a calendar event when the date doesn't parse, and doesn't fail the flyer", async () => {
