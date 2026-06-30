@@ -166,7 +166,7 @@ router.get("/me", async (req, res) => {
     const ministryIds = user.ministries.map((m) => m.ministry_id);
     const ministries = await Ministry.find(
       { ministry_id: { $in: ministryIds } },
-      "ministry_id name tagline parent_ministry_id",
+      "ministry_id name tagline parent_ministry_id branding.colors.primary",
     );
     const ministryById = new Map(
       ministries.map((m) => [m.ministry_id, m]),
@@ -180,6 +180,7 @@ router.get("/me", async (req, res) => {
         name: ministry?.name || m.ministry_id,
         tagline: ministry?.tagline,
         parent_ministry_id: ministry?.parent_ministry_id || null,
+        color: ministry?.branding?.colors?.primary || null,
       };
     });
 

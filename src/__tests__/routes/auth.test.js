@@ -208,6 +208,22 @@ describe("GET /api/auth/me", () => {
     expect(res.body.password).toBeUndefined();
   });
 
+  it("includes each ministry's brand color, for color-coding events across ministries", async () => {
+    await Ministry.findOneAndUpdate(
+      { ministry_id: "ktm-test" },
+      { "branding.colors.primary": "#03293F" },
+    );
+    const registerRes = await request(app)
+      .post("/api/auth/register")
+      .send(testUser);
+
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${registerRes.body.token}`);
+
+    expect(res.body.ministries[0].color).toBe("#03293F");
+  });
+
   it("returns 401 with no token", async () => {
     const res = await request(app).get("/api/auth/me");
     expect(res.status).toBe(401);
