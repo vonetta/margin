@@ -50,7 +50,7 @@ const buildLiteralPrompt = (ministry, topicHint) => {
     ? ` The event: ${topicHint}.`
     : " A church gathering.";
 
-  return `A real, relevant photo-style image for a ministry event flyer.${topicLine} Show people authentically engaged — worship, prayer, a small group, hands raised, or a gathered congregation, whichever fits best. Warm, natural lighting, documentary/editorial photography style, not staged or artificial-looking. Cohesive with this color palette where natural: ${palette}. Leave open negative space on one side for text to sit on top. No text, no words, no logos overlaid on the image.`;
+  return `A real, relevant photo-style image for a ministry event flyer.${topicLine} Show people authentically engaged — worship, prayer, a small group, hands raised, or a gathered congregation, whichever fits best. Fill the frame with the scene — the subject should fill most of the frame, shot close enough that it reads as a full, rich composition, not small or distant with lots of empty space around it. Warm, natural lighting, documentary/editorial photography style, not staged or artificial-looking. Cohesive with this color palette where natural: ${palette}. No text, no words, no logos overlaid on the image.`;
 };
 
 // Pick an existing background by tone, or generate + store a new one. A

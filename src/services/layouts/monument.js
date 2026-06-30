@@ -119,9 +119,14 @@ const render = ({
   // fully visible on the right where the host photo sits. A loose abstract
   // line texture sits over the gradient fallback so it doesn't read as a
   // flat, empty color when there's no real photo to fill the space.
+  // With a real photo, the brand gradient is OFF by default (0 opacity) —
+  // dialing gradient_overlay_opacity up layers it as a translucent tint on
+  // top of the photo via standard CSS multi-background stacking, rather
+  // than replacing the photo outright.
+  const overlayAlpha = s.gradient_overlay_opacity / 100;
   const photoZoneBg = backgroundUrl
-    ? `background-image: linear-gradient(${hexToRgba(primary, 0.3)}, ${hexToRgba(primary, 0.5)}), url('${backgroundUrl}'); background-size: cover; background-position: center;`
-    : `background-image: ${abstractLinesOverlay("#ffffff", 0.16)}, ${brandGradient({ primary, accent, gold }, s.gradient_angle)}; background-size: cover, cover;`;
+    ? `background-image: ${overlayAlpha > 0 ? `${brandGradient({ primary, accent, gold }, s.gradient_angle, overlayAlpha)}, ` : ""}linear-gradient(${hexToRgba(primary, 0.3)}, ${hexToRgba(primary, 0.5)}), url('${backgroundUrl}'); background-size: ${overlayAlpha > 0 ? "cover, cover, cover" : "cover, cover"}; background-position: center;`
+    : `background-image: ${abstractLinesOverlay("#ffffff", 0.16)}, ${brandGradient({ primary, accent, gold }, s.gradient_angle, 1)}; background-size: cover, cover;`;
 
   const speakerCards = speakers
     .map((s) => {

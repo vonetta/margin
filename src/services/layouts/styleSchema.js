@@ -41,6 +41,12 @@ const STYLE_SCHEMA = {
   // The gradient fallback's direction in degrees (CSS linear-gradient
   // angle) — 0 is bottom-to-top, 90 is left-to-right, etc.
   gradient_angle: { type: "number", min: 0, max: 360, default: 165 },
+  // How strongly the brand gradient shows on TOP of a real background
+  // photo, 0-100. Defaults to 0 (no overlay, photo shown as-is) so a real
+  // photo's look doesn't silently change for anyone who isn't actively
+  // using the wizard to dial this up. Has no effect when there's no
+  // background photo — the gradient is already the full background then.
+  gradient_overlay_opacity: { type: "number", min: 0, max: 100, default: 0 },
   // Free-form rather than validated against a fixed list: the wizard only
   // ever sends one of the ministry's own curated type_system fonts, so
   // there's nothing meaningful to clamp against here. An unrecognized name

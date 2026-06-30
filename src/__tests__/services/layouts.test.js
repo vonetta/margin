@@ -127,6 +127,27 @@ describe("suggestLayout", () => {
     expect(html).toContain("font-size: 55px");
   });
 
+  it("does not overlay the brand gradient on a background photo by default", () => {
+    const html = renderLayout("monument", {
+      content: { title: "Test Event" },
+      branding: { colors: { primary: "#03293F", accent: "#EA8A8B", gold: "#DAAE4F" } },
+      backgroundUrl: "https://example.com/photo.jpg",
+    });
+    // Only the dark legibility scrim + the photo — no extra gradient layer.
+    expect(html.match(/background-image:/g).length).toBe(1);
+  });
+
+  it("layers a translucent brand gradient on top of a background photo when requested", () => {
+    const html = renderLayout("monument", {
+      content: { title: "Test Event" },
+      branding: { colors: { primary: "#03293F", accent: "#EA8A8B", gold: "#DAAE4F" } },
+      backgroundUrl: "https://example.com/photo.jpg",
+      style: { gradient_overlay_opacity: 50 },
+    });
+    expect(html).toContain("rgba(3, 41, 63, 0.5)"); // #03293F at 50% alpha
+    expect(html).toContain("url('https://example.com/photo.jpg')");
+  });
+
   it("lists all four layouts", () => {
     const layouts = listLayouts();
     expect(layouts.length).toBe(4);

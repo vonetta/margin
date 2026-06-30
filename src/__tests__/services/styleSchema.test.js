@@ -46,6 +46,16 @@ describe("validateStyle", () => {
     );
   });
 
+  it("defaults gradient_overlay_opacity to 0 — no overlay on a photo unless asked for", () => {
+    expect(defaultStyle().gradient_overlay_opacity).toBe(0);
+    expect(validateStyle({}).gradient_overlay_opacity).toBe(0);
+  });
+
+  it("clamps gradient_overlay_opacity to 0-100", () => {
+    expect(validateStyle({ gradient_overlay_opacity: 150 }).gradient_overlay_opacity).toBe(100);
+    expect(validateStyle({ gradient_overlay_opacity: -10 }).gradient_overlay_opacity).toBe(0);
+  });
+
   it("accepts a valid enum value", () => {
     expect(
       validateStyle({ logo_placement: "footer-right" }).logo_placement,

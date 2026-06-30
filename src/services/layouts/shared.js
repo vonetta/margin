@@ -146,12 +146,16 @@ const resolveFonts = (typography) => ({
 // brand-color gradient, not generic AI-generated abstract art. Reference
 // flyers use real photos or simple solid/gradient color blocks — never
 // painterly swirl art — so this is what every layout falls back to.
-const brandGradient = (colors, angle = 150) => {
+// alpha (0-1) lets the gradient be layered as a translucent overlay on top
+// of a real background photo via standard CSS multi-background stacking,
+// instead of only ever being the opaque fallback when there's no photo.
+const brandGradient = (colors, angle = 150, alpha = 1) => {
   const stops = [colors.primary, colors.accent || colors.primary, colors.gold]
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((c) => hexToRgba(c, alpha));
   // Layer a soft radial highlight over the linear gradient for some depth
   // — a flat two/three-stop linear gradient alone reads as a placeholder.
-  return `radial-gradient(circle at 25% 15%, ${hexToRgba("#ffffff", 0.18)}, transparent 45%), linear-gradient(${angle}deg, ${stops.join(", ")})`;
+  return `radial-gradient(circle at 25% 15%, ${hexToRgba("#ffffff", 0.18 * alpha)}, transparent 45%), linear-gradient(${angle}deg, ${stops.join(", ")})`;
 };
 
 // A small color-blocked info pill: bold label above, value below, inside a
