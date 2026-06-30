@@ -234,7 +234,7 @@ const render = ({
     .meta-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: ${accent}; }
     .meta-value { font-size: 18px; font-weight: 700; color: ${primary}; }
     .meta-divider { width: 1px; height: 30px; background: ${hexToRgba(primary, 0.2)}; }
-    .footer { flex: 0 0 auto; background: ${primary}; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 36px 56px; border-top: 4px solid ${gold}; }
+    .footer { flex: 0 0 auto; background: ${primary}; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 56px; border-top: 4px solid ${gold}; }
     .footer-left { display: flex; flex-direction: column; gap: 14px; }
     .footer-right { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
     ${footerLogoNeedsInvert ? ".footer-logo .logo { filter: brightness(0) invert(1); }" : ""}
