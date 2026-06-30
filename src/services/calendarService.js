@@ -27,6 +27,16 @@ const isValidRecurrenceRule = (ruleString) => {
 const durationMs = (event) =>
   event.end ? event.end.getTime() - event.start.getTime() : 0;
 
+// Generic version of buildRule that isn't tied to the Event shape —
+// Tasks recur off recurrence_rule + due_date rather than start/end, but
+// it's the same RRULE mechanics.
+const nextOccurrenceAfter = (ruleString, anchorDate, afterDate) => {
+  if (!ruleString || !anchorDate) return null;
+  const opts = RRule.parseString(ruleString);
+  const rule = new RRule({ ...opts, dtstart: anchorDate });
+  return rule.after(afterDate, false);
+};
+
 // Expands one stored Event document into its actual occurrences within
 // [from, to]. A one-off event yields itself (if it falls in range); a
 // recurring one yields every occurrence the RRULE produces in that window.
@@ -115,4 +125,5 @@ module.exports = {
   expandEvents,
   parseFlyerDate,
   buildPublicCalendarFeed,
+  nextOccurrenceAfter,
 };

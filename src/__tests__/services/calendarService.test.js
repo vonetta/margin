@@ -4,6 +4,7 @@ const {
   expandEvents,
   parseFlyerDate,
   buildPublicCalendarFeed,
+  nextOccurrenceAfter,
 } = require("../../services/calendarService");
 
 const makeEvent = (overrides = {}) => ({
@@ -142,5 +143,29 @@ describe("buildPublicCalendarFeed", () => {
     });
     expect(feed).toContain("BEGIN:VCALENDAR");
     expect(feed).toContain("END:VCALENDAR");
+  });
+});
+
+describe("nextOccurrenceAfter", () => {
+  it("returns the next weekly occurrence strictly after the given date", () => {
+    const next = nextOccurrenceAfter(
+      "FREQ=WEEKLY",
+      new Date("2026-06-02T18:00:00Z"),
+      new Date("2026-06-02T18:00:00Z"),
+    );
+    expect(next.toISOString()).toBe("2026-06-09T18:00:00.000Z");
+  });
+
+  it("returns null for a non-recurring (null) rule", () => {
+    expect(nextOccurrenceAfter(null, new Date(), new Date())).toBeNull();
+  });
+
+  it("returns null once a bounded recurrence (COUNT) is exhausted", () => {
+    const next = nextOccurrenceAfter(
+      "FREQ=WEEKLY;COUNT=1",
+      new Date("2026-06-02T18:00:00Z"),
+      new Date("2026-06-02T18:00:00Z"),
+    );
+    expect(next).toBeNull();
   });
 });

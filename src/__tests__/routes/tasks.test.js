@@ -133,6 +133,44 @@ describe("POST /api/tasks", () => {
       .send({ assigned_to: teamAId });
     expect(res.status).toBe(400);
   });
+
+  it("creates a recurring task with a valid RRULE and a due_date anchor", async () => {
+    const res = await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`)
+      .send({
+        title: "Submit the bulletin",
+        assigned_to: teamAId,
+        due_date: "2026-06-02T18:00:00Z",
+        recurrence_rule: "FREQ=WEEKLY",
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.recurrence_rule).toBe("FREQ=WEEKLY");
+  });
+
+  it("rejects a recurring task with no due_date to anchor it", async () => {
+    const res = await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`)
+      .send({ title: "Submit the bulletin", assigned_to: teamAId, recurrence_rule: "FREQ=WEEKLY" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an invalid recurrence rule", async () => {
+    const res = await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`)
+      .send({
+        title: "Submit the bulletin",
+        assigned_to: teamAId,
+        due_date: "2026-06-02T18:00:00Z",
+        recurrence_rule: "NOT VALID @@@",
+      });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("GET /api/tasks", () => {
@@ -190,6 +228,46 @@ describe("PUT /api/tasks/:id/complete and /reopen", () => {
       .set("Authorization", `Bearer ${teamAToken}`);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("done");
+  });
+
+  it("rolls a recurring task forward to its next due date when completed", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Submit the bulletin",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      due_date: new Date("2026-06-02T18:00:00Z"),
+      recurrence_rule: "FREQ=WEEKLY",
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/complete`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("done");
+    expect(res.body.next_task).toBeTruthy();
+    expect(res.body.next_task.status).toBe("open");
+    expect(new Date(res.body.next_task.due_date).toISOString()).toBe("2026-06-09T18:00:00.000Z");
+
+    const allTasks = await Task.find({ ministry_id: "ktm-test", title: "Submit the bulletin" });
+    expect(allTasks.length).toBe(2);
+  });
+
+  it("does not roll forward a one-off (non-recurring) task", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "One-off",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      due_date: new Date("2026-06-02T18:00:00Z"),
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/complete`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`);
+    expect(res.body.next_task).toBeNull();
   });
 
   it("rejects a teammate who is neither the assignee, assigner, nor admin/leader", async () => {

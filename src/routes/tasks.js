@@ -5,6 +5,7 @@ const Task = require("../models/Task");
 const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
 const { notifyTaskAssigned } = require("../services/notificationService");
+const { isValidRecurrenceRule, nextOccurrenceAfter } = require("../services/calendarService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -61,11 +62,24 @@ router.post(
     body("assigned_to").trim().notEmpty().withMessage("assigned_to is required"),
     body("description").optional().trim(),
     body("due_date").optional().isISO8601(),
+    body("recurrence_rule")
+      .optional({ nullable: true })
+      .trim()
+      .custom((value) => {
+        if (value && !isValidRecurrenceRule(value)) {
+          throw new Error("recurrence_rule is not a valid recurrence pattern");
+        }
+        return true;
+      }),
   ],
   validate,
   async (req, res) => {
     try {
-      const { title, description, due_date, assigned_to } = req.body;
+      const { title, description, due_date, assigned_to, recurrence_rule } = req.body;
+
+      if (recurrence_rule && !due_date) {
+        return res.status(400).json({ error: "A recurring task needs a due_date to anchor the recurrence" });
+      }
 
       const eligible = await isMinistryMember(assigned_to, req.ministryId);
       if (!eligible) {
@@ -79,6 +93,7 @@ router.post(
         title,
         description,
         due_date: due_date ? new Date(due_date) : undefined,
+        recurrence_rule: recurrence_rule || undefined,
         assigned_to,
         assigned_by: req.userId.toString(),
       });
@@ -111,6 +126,15 @@ router.put(
     body("description").optional().trim(),
     body("due_date").optional().isISO8601(),
     body("assigned_to").optional().trim().notEmpty(),
+    body("recurrence_rule")
+      .optional({ nullable: true })
+      .trim()
+      .custom((value) => {
+        if (value && !isValidRecurrenceRule(value)) {
+          throw new Error("recurrence_rule is not a valid recurrence pattern");
+        }
+        return true;
+      }),
   ],
   validate,
   async (req, res) => {
@@ -146,6 +170,11 @@ router.put(
 );
 
 // PUT /api/tasks/:id/complete
+// Completing a recurring task also rolls a fresh "open" task forward to
+// the next occurrence (same title/description/assignee), rather than
+// expanding occurrences virtually the way Calendar events do — a task
+// carries real per-occurrence state (who it ended up assigned to) that
+// only makes sense once the prior occurrence is actually done.
 router.put("/:id/complete", async (req, res) => {
   try {
     const task = await Task.findOne({ _id: req.params.id, ministry_id: req.ministryId });
@@ -156,7 +185,25 @@ router.put("/:id/complete", async (req, res) => {
     task.status = "done";
     task.completed_at = new Date();
     await task.save();
-    res.json(task);
+
+    let nextTask = null;
+    if (task.recurrence_rule && task.due_date) {
+      const nextDue = nextOccurrenceAfter(task.recurrence_rule, task.due_date, task.due_date);
+      if (nextDue) {
+        nextTask = await Task.create({
+          ministry_id: req.ministryId,
+          title: task.title,
+          description: task.description,
+          due_date: nextDue,
+          recurrence_rule: task.recurrence_rule,
+          assigned_to: task.assigned_to,
+          assigned_by: task.assigned_by,
+        });
+        await notifyTaskAssigned({ ministryId: req.ministryId, task: nextTask });
+      }
+    }
+
+    res.json({ ...task.toObject(), next_task: nextTask });
   } catch (error) {
     res.status(500).json({ error: "Failed to complete task" });
   }
