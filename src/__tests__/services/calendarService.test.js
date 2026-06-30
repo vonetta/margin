@@ -117,6 +117,24 @@ describe("buildPublicCalendarFeed", () => {
     expect(feed).not.toContain("Not approved yet");
   });
 
+  it("emits a single VEVENT with a native RRULE for a recurring event, not one per occurrence", () => {
+    const events = [
+      makeEvent({
+        _id: "prayer-call",
+        visibility: "public",
+        status: "approved",
+        title: "Prayer Call",
+        recurrence_rule: "FREQ=WEEKLY;BYDAY=TU,TH",
+      }),
+    ];
+    const feed = buildPublicCalendarFeed(ministry, events, {
+      from: new Date("2026-06-01T00:00:00Z"),
+      to: new Date("2026-06-10T00:00:00Z"),
+    });
+    expect(feed.match(/BEGIN:VEVENT/g).length).toBe(1);
+    expect(feed).toContain("RRULE:FREQ=WEEKLY;BYDAY=TU,TH");
+  });
+
   it("produces a valid VCALENDAR document", () => {
     const feed = buildPublicCalendarFeed(ministry, [], {
       from: new Date(),

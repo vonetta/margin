@@ -83,19 +83,25 @@ const buildPublicCalendarFeed = (ministry, events, { from, to }) => {
   });
 
   const publicApproved = events.filter(
-    (e) => e.visibility === "public" && e.status === "approved",
+    (e) =>
+      e.visibility === "public" &&
+      e.status === "approved" &&
+      // A recurring event's own RRULE governs which occurrences are real
+      // (and is handed to the calendar client to expand, not expanded
+      // here) — only one-off events need the from/to window applied.
+      (e.recurrence_rule || (e.start >= from && e.start <= to)),
   );
-  const occurrences = expandEvents(publicApproved, from, to);
 
-  for (const occ of occurrences) {
+  for (const event of publicApproved) {
     calendar.createEvent({
-      start: occ.occurrence_start,
-      end: occ.occurrence_end || occ.occurrence_start,
-      allDay: occ.all_day,
-      summary: occ.title,
-      description: occ.description || "",
-      location: occ.location || "",
-      id: `${occ._id}-${occ.occurrence_start.getTime()}`,
+      start: event.start,
+      end: event.end || event.start,
+      allDay: event.all_day,
+      summary: event.title,
+      description: event.description || "",
+      location: event.location || "",
+      id: event._id.toString(),
+      repeating: event.recurrence_rule || undefined,
     });
   }
 
