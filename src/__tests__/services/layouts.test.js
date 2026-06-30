@@ -148,6 +148,30 @@ describe("suggestLayout", () => {
     expect(html).toContain("url('https://example.com/photo.jpg')");
   });
 
+  it("forces a backing on a photo-corner logo even when none was requested, since it always sits on busy content", () => {
+    const html = renderLayout("monument", {
+      content: { title: "Test Event" },
+      branding: {
+        colors: { primary: "#03293F", gold: "#DAAE4F" },
+        logo_url: "https://example.com/logo.png",
+      },
+      style: { logo_placement: "photo-corner", logo_backing: "none" },
+    });
+    expect(html).toContain('class="logo-backing logo-backing-circle"');
+  });
+
+  it("respects an explicit pill backing on a photo-corner logo instead of forcing circle", () => {
+    const html = renderLayout("monument", {
+      content: { title: "Test Event" },
+      branding: {
+        colors: { primary: "#03293F", gold: "#DAAE4F" },
+        logo_url: "https://example.com/logo.png",
+      },
+      style: { logo_placement: "photo-corner", logo_backing: "pill" },
+    });
+    expect(html).toContain('class="logo-backing logo-backing-pill"');
+  });
+
   it("lists all four layouts", () => {
     const layouts = listLayouts();
     expect(layouts.length).toBe(4);

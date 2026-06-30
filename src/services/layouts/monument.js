@@ -84,9 +84,19 @@ const render = ({
   // contrast regardless of what's underneath it (a busy photo, a bold
   // gradient, the dark footer) — independent of where it's placed.
   const logoRaw = renderLogo(branding.logo_url, s.logo_size);
+  // photo-corner always lands directly on top of busy, variable-tone
+  // content (a photo or bold gradient) — unlike the other placements,
+  // there's no scrim or solid panel behind it, so a bare logo there is
+  // close to unreadable no matter what's in the photo. Force a backing
+  // there even if the chosen backing is "none"; every other placement
+  // still respects the user's actual choice.
+  const effectiveBacking =
+    s.logo_placement === "photo-corner" && s.logo_backing === "none"
+      ? "circle"
+      : s.logo_backing;
   const logo =
-    logoRaw && s.logo_backing !== "none"
-      ? `<span class="logo-backing logo-backing-${s.logo_backing}">${logoRaw}</span>`
+    logoRaw && effectiveBacking !== "none"
+      ? `<span class="logo-backing logo-backing-${effectiveBacking}">${logoRaw}</span>`
       : logoRaw;
 
   const logoInContent =
@@ -184,7 +194,7 @@ const render = ({
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: ${dims.width}px; height: ${dims.height}px; }
     body { font-family: '${body}', sans-serif; overflow: hidden; display: flex; flex-direction: column; background: ${bg}; }
-    .top-zone { position: relative; overflow: hidden; ${hasSpeakers ? "flex: 0 0 auto; min-height: 520px;" : "flex: 1; min-height: 0;"} ${photoZoneBg} }
+    .top-zone { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; ${hasSpeakers ? "flex: 0 0 auto; min-height: 520px;" : "flex: 1; min-height: 0;"} ${photoZoneBg} }
     .text-scrim { position: absolute; top: 0; left: 0; bottom: 0; width: 58%; background: linear-gradient(90deg, ${bg} 0%, ${bg} 42%, ${hexToRgba(bg, 0)} 100%); z-index: 1; }
     .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; z-index: 2; }
     .host-circle-wrap { position: relative; display: inline-block; }
