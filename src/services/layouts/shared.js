@@ -194,6 +194,44 @@ const abstractLinesOverlay = (color = "#ffffff", opacity = 0.14) => {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };
 
+// eslint-disable-next-line global-require
+const { validateStyle } = require("./styleSchema");
+
+// The validate → derive-colors → resolve-fonts sequence is identical
+// across every layout — pulled out once so feature/canvas/showcase don't
+// each re-implement it slightly differently. extraDefaults lets a layout
+// merge in its own pre-style defaults (e.g. monument's auto-scaled
+// speaker_photo_size) before the explicit style overrides win.
+const resolveStyledTheme = (branding, typography, style, extraDefaults = {}) => {
+  const s = validateStyle({ ...extraDefaults, ...(style || {}) });
+  const resolvedColors = resolveColors(branding);
+  const { bg, text } = resolvedColors;
+  const variants = deriveColorVariants(resolvedColors);
+  const { primary, accent, gold } = variants[s.color_variant] || variants.brand;
+  const resolvedFonts = resolveFonts(typography);
+  const display = s.display_font || resolvedFonts.display;
+  const body = s.body_font || resolvedFonts.body;
+  const accentFont = s.accent_font || resolvedFonts.accent;
+  return { s, primary, accent, gold, bg, text, display, body, accentFont };
+};
+
+// Wraps the logo in a solid backing shape when it's about to land on busy,
+// variable-tone content (anywhere other than the two placements that sit
+// on a readable solid/scrim panel) — even if the requested backing is
+// "none", since a bare logo directly on a photo or bold gradient is close
+// to unreadable regardless of which ministry's logo it is.
+const resolveLogo = (branding, s, { safePlacements = ["top-left", "top-center"] } = {}) => {
+  const logoRaw = renderLogo(branding.logo_url, s.logo_size);
+  const onBusyBackground = !safePlacements.includes(s.logo_placement);
+  const effectiveBacking =
+    onBusyBackground && s.logo_backing === "none" ? "circle" : s.logo_backing;
+  const logo =
+    logoRaw && effectiveBacking !== "none"
+      ? `<span class="logo-backing logo-backing-${effectiveBacking}">${logoRaw}</span>`
+      : logoRaw;
+  return { logo, footerLogoNeedsInvert: s.logo_backing === "none" };
+};
+
 module.exports = {
   escapeHtml,
   hexToRgba,
@@ -208,4 +246,6 @@ module.exports = {
   renderLogo,
   abstractLinesOverlay,
   deriveColorVariants,
+  resolveStyledTheme,
+  resolveLogo,
 };

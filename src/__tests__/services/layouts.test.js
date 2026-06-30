@@ -172,6 +172,71 @@ describe("suggestLayout", () => {
     expect(html).toContain('class="logo-backing logo-backing-pill"');
   });
 
+  it("renders description, theme_tags, and highlights on all four layouts, not just monument", () => {
+    const props = {
+      content: {
+        title: "Test Event",
+        description: "A description that should show up.",
+        theme_tags: ["Worship", "Equipping"],
+        highlights: ["A highlight line"],
+        audience: "Worship leaders",
+      },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F", accent: "#EA8A8B" } },
+    };
+    for (const id of ["monument", "feature", "canvas", "showcase"]) {
+      const html = renderLayout(id, props);
+      expect(html).toContain("A description that should show up.");
+      expect(html).toContain("Worship");
+      expect(html).toContain("A highlight line");
+    }
+  });
+
+  it("applies title_size and color_variant on all four layouts, not just monument", () => {
+    const props = {
+      content: { title: "Test Event" },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F", accent: "#EA8A8B" } },
+      style: { title_size: 55, color_variant: "triad" },
+    };
+    for (const id of ["monument", "feature", "canvas", "showcase"]) {
+      const html = renderLayout(id, props);
+      expect(html).toContain("font-size: 55px");
+    }
+  });
+
+  it("forces a logo backing on photo-corner placement for every layout, since none of them have a scrim there", () => {
+    const props = {
+      content: { title: "Test Event" },
+      branding: {
+        colors: { primary: "#03293F", gold: "#DAAE4F" },
+        logo_url: "https://example.com/logo.png",
+      },
+      style: { logo_placement: "photo-corner", logo_backing: "none" },
+    };
+    for (const id of ["feature", "canvas", "showcase"]) {
+      const html = renderLayout(id, props);
+      expect(html).toContain('class="logo-backing logo-backing-circle"');
+    }
+  });
+
+  it("renders showcase's footer without clipping it off the left edge", () => {
+    const html = renderLayout("showcase", {
+      content: { title: "Test Event", cta: "Register today!" },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+    });
+    expect(html).not.toContain("margin: 0 -60px");
+  });
+
+  it("showcase degrades gracefully with no host or speakers, instead of an empty grid", () => {
+    const html = renderLayout("showcase", {
+      content: { title: "Test Event" },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+      host: null,
+      speakers: [],
+    });
+    expect(html).not.toContain("Featuring");
+    expect(html).toContain("justify-content: center;");
+  });
+
   it("lists all four layouts", () => {
     const layouts = listLayouts();
     expect(layouts.length).toBe(4);
