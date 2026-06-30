@@ -244,6 +244,30 @@ describe("POST /api/ministry/sub-ministries", () => {
   });
 });
 
+describe("GET /api/ministry/team", () => {
+  it("lists the team members of this ministry with their roles", async () => {
+    const res = await request(app)
+      .get("/api/ministry/team")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    const emails = res.body.map((u) => u.email);
+    expect(emails).toContain("ministry-test@ktm.com");
+    expect(emails).toContain("ministry-team-test@ktm.com");
+    const admin = res.body.find((u) => u.email === "ministry-test@ktm.com");
+    expect(admin.role).toBe("admin");
+  });
+
+  it("rejects a team-role member (requires admin/leader)", async () => {
+    const res = await request(app)
+      .get("/api/ministry/team")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("GET /api/ministry/sub-ministries", () => {
   it("lists sub-ministries under the current ministry", async () => {
     await Ministry.create({

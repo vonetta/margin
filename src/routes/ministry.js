@@ -165,6 +165,31 @@ router.post(
   },
 );
 
+// GET /api/ministry/team — the roster of logged-in team members for this
+// ministry, used to pick who an internal event (e.g. a prayer call meant
+// for a subset of staff) should be visible to. Distinct from
+// /api/people, which is external contacts (speakers, congregants) rather
+// than accounts that can log into Margin.
+router.get("/team", requireRole("admin", "leader"), async (req, res) => {
+  try {
+    const users = await User.find({
+      "ministries.ministry_id": req.ministryId,
+      is_active: true,
+    }).select("name email ministries");
+
+    const team = users.map((u) => ({
+      _id: u._id,
+      name: u.name,
+      email: u.email,
+      role: u.getMembership(req.ministryId)?.role,
+    }));
+
+    res.json(team);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch team" });
+  }
+});
+
 // GET /api/ministry/sub-ministries
 // List ministries linked under the current one. This is visibility only —
 // being able to see that a sub-ministry exists does not grant access to

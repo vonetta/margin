@@ -11,7 +11,7 @@ const testMinistry = {
   plan: "enterprise",
 };
 
-let adminToken, teamToken;
+let adminToken, teamToken, teamUserId;
 
 beforeAll(async () => {
   await connectTestDB();
@@ -50,6 +50,7 @@ beforeEach(async () => {
     role: "team",
   });
   teamToken = t.body.token;
+  teamUserId = t.body.user.id;
 });
 
 describe("POST /api/events", () => {
@@ -119,6 +120,83 @@ describe("GET /api/events", () => {
       .set("Authorization", `Bearer ${teamToken}`);
     expect(res.status).toBe(200);
     expect(res.body.length).toBe(1);
+  });
+});
+
+describe("per-person event visibility (visible_to)", () => {
+  it("hides an internal event from a team member not on its visible_to list", async () => {
+    await Event.create({
+      ministry_id: "ktm-test",
+      title: "Leadership Prayer Call",
+      start: new Date("2026-06-03T18:00:00Z"),
+      visible_to: ["someone-elses-user-id"],
+    });
+
+    const res = await request(app)
+      .get("/api/events")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+    expect(res.body.length).toBe(0);
+  });
+
+  it("shows the event to a team member who is on its visible_to list", async () => {
+    await Event.create({
+      ministry_id: "ktm-test",
+      title: "Leadership Prayer Call",
+      start: new Date("2026-06-03T18:00:00Z"),
+      visible_to: [teamUserId],
+    });
+
+    const res = await request(app)
+      .get("/api/events")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+    expect(res.body.length).toBe(1);
+  });
+
+  it("shows an event with no visible_to list to every team member (default, unrestricted)", async () => {
+    await Event.create({
+      ministry_id: "ktm-test",
+      title: "All-Staff Meeting",
+      start: new Date("2026-06-03T18:00:00Z"),
+    });
+
+    const res = await request(app)
+      .get("/api/events")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+    expect(res.body.length).toBe(1);
+  });
+
+  it("always shows admins/leaders every event, regardless of visible_to", async () => {
+    await Event.create({
+      ministry_id: "ktm-test",
+      title: "Leadership Prayer Call",
+      start: new Date("2026-06-03T18:00:00Z"),
+      visible_to: ["someone-elses-user-id"],
+    });
+
+    const res = await request(app)
+      .get("/api/events")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.body.length).toBe(1);
+  });
+
+  it("respects visible_to in the expanded (recurrence-aware) endpoint too", async () => {
+    await Event.create({
+      ministry_id: "ktm-test",
+      title: "Leadership Prayer Call",
+      start: new Date("2026-06-02T18:00:00Z"),
+      recurrence_rule: "FREQ=WEEKLY;BYDAY=TU,TH",
+      visible_to: ["someone-elses-user-id"],
+    });
+
+    const res = await request(app)
+      .get("/api/events/expanded?from=2026-06-01T00:00:00Z&to=2026-06-15T00:00:00Z")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+    expect(res.body.length).toBe(0);
   });
 });
 

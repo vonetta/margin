@@ -28,6 +28,13 @@ const eventSchema = new mongoose.Schema({
     default: "internal",
   },
 
+  // Narrows an internal event to specific team members (User ids), e.g. a
+  // prayer call meant for a subset of staff rather than the whole
+  // ministry. Empty/unset means visible to every team member of this
+  // ministry — the original, broader default. Irrelevant to public
+  // events: those go out to the unauthenticated feed regardless.
+  visible_to: [{ type: String }],
+
   // Events created automatically from a generated flyer land here as
   // "pending" rather than going straight onto the calendar — someone
   // still has to confirm the parsed date/details are right before it's

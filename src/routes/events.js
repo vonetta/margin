@@ -23,15 +23,36 @@ const validRecurrence = body("recurrence_rule")
     return true;
   });
 
+const validVisibleTo = body("visible_to")
+  .optional()
+  .isArray()
+  .withMessage("visible_to must be an array of user ids");
+
+// Admins/leaders manage the calendar, so they see every event regardless
+// of who it's addressed to. Everyone else only sees an event if it has
+// no visible_to list (the default — open to the whole team) or they're
+// explicitly named on it.
+const applyVisibilityFilter = (req, filter) => {
+  if (req.userRole === "admin" || req.userRole === "leader") return filter;
+  return {
+    ...filter,
+    $or: [
+      { visible_to: { $exists: false } },
+      { visible_to: { $size: 0 } },
+      { visible_to: req.userId.toString() },
+    ],
+  };
+};
+
 // GET /api/events — raw event list for this ministry (team view, every
-// status/visibility). Any authenticated team member can see their own
-// ministry's full calendar — the access split that matters here is
-// internal team vs. public congregants, not role-within-the-team.
+// status/visibility, narrowed by per-event visible_to for non-admin/
+// leader roles).
 router.get("/", async (req, res) => {
   try {
     const { status } = req.query;
-    const filter = { ministry_id: req.ministryId };
+    let filter = { ministry_id: req.ministryId };
     if (status) filter.status = status;
+    filter = applyVisibilityFilter(req, filter);
 
     const events = await Event.find(filter).sort({ start: 1 });
     res.json(events);
@@ -55,10 +76,11 @@ router.get(
     try {
       const from = new Date(req.query.from);
       const to = new Date(req.query.to);
-      const events = await Event.find({
+      const filter = applyVisibilityFilter(req, {
         ministry_id: req.ministryId,
         status: { $ne: "rejected" },
       });
+      const events = await Event.find(filter);
       res.json(expandEvents(events, from, to));
     } catch (error) {
       console.error("Event expansion error:", error);
@@ -80,6 +102,7 @@ router.post(
     body("all_day").optional().isBoolean(),
     validRecurrence,
     body("visibility").optional().isIn(["internal", "public"]),
+    validVisibleTo,
   ],
   validate,
   async (req, res) => {
@@ -94,6 +117,7 @@ router.post(
         all_day: req.body.all_day || false,
         recurrence_rule: req.body.recurrence_rule || undefined,
         visibility: req.body.visibility || "internal",
+        visible_to: req.body.visible_to || [],
         status: "approved",
         source: "manual",
         created_by: req.userId,
@@ -119,6 +143,7 @@ router.put(
     body("all_day").optional().isBoolean(),
     validRecurrence,
     body("visibility").optional().isIn(["internal", "public"]),
+    validVisibleTo,
   ],
   validate,
   async (req, res) => {
