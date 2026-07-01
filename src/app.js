@@ -20,6 +20,8 @@ const taskRoutes = require("./routes/tasks");
 const notificationRoutes = require("./routes/notifications");
 const inviteRoutes = require("./routes/invites");
 const publicInviteRoutes = require("./routes/publicInvites");
+const socialAuthRoutes = require("./routes/socialAuth");
+const publicSocialCallbackRoutes = require("./routes/publicSocialCallback");
 dotenv.config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
 });
@@ -84,6 +86,12 @@ app.use("/api/public/calendar", publicCalendarRoutes);
 // page show who/where/what-role before the invitee has an account.
 app.use("/api/public/invites", publicInviteRoutes);
 
+// Meta's OAuth redirect — a raw browser navigation with no Authorization
+// header, so this has to be public. Mounted at the exact /callback path
+// before the tenant-guarded /api/social/* routes below, so it's matched
+// first and never hits the auth middleware.
+app.use("/api/social/callback", publicSocialCallbackRoutes);
+
 // All routes below require tenant and auth middleware
 app.use("/api", tenantMiddleware);
 app.use("/api", authMiddleware);
@@ -99,6 +107,7 @@ app.use("/api/events", eventRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/invites", inviteRoutes);
+app.use("/api/social", socialAuthRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });
