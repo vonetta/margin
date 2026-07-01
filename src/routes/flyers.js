@@ -18,6 +18,7 @@ const Background = require("../models/Background");
 const Event = require("../models/Event");
 const { parseFlyerDate } = require("../services/calendarService");
 const { notifyEventPendingApproval } = require("../services/notificationService");
+const { limitsFor, planLimitError, startOfMonth } = require("../services/planLimits");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -111,6 +112,14 @@ router.post(
   validate,
   async (req, res) => {
     try {
+      const flyersThisMonth = await Flyer.countDocuments({
+        ministry_id: req.ministryId,
+        created_at: { $gte: startOfMonth() },
+      });
+      if (flyersThisMonth >= limitsFor(req.ministry.plan).flyers_per_month) {
+        return res.status(402).json({ error: planLimitError("flyers_per_month", req.ministry.plan) });
+      }
+
       const {
         title,
         subtitle,

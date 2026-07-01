@@ -7,9 +7,12 @@ const AiProfile = require("../models/AiProfile");
 const User = require("../models/User");
 const Event = require("../models/Event");
 const Task = require("../models/Task");
+const Flyer = require("../models/Flyer");
+const Invite = require("../models/Invite");
 const { requireRole } = require("../middleware/auth");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { expandEvents } = require("../services/calendarService");
+const { limitsFor, planLimitError, startOfMonth } = require("../services/planLimits");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -39,6 +42,38 @@ router.get("/", async (req, res) => {
     res.json(req.ministry);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch ministry" });
+  }
+});
+
+// GET /api/ministry/plan-usage — current usage against this ministry's
+// plan caps, so the UI can show "3 of 5 team members used" ahead of
+// time instead of someone only finding out at the point of a blocked
+// action. Any authenticated member can see it (not admin-only) since
+// it's informational, not something that changes anything.
+router.get("/plan-usage", async (req, res) => {
+  try {
+    const limits = limitsFor(req.ministry.plan);
+
+    const [teamMembers, pendingInvites, subMinistries, flyersThisMonth] = await Promise.all([
+      User.countDocuments({ "ministries.ministry_id": req.ministryId, is_active: true }),
+      Invite.countDocuments({ ministry_id: req.ministryId, status: "pending" }),
+      Ministry.countDocuments({ parent_ministry_id: req.ministryId }),
+      Flyer.countDocuments({ ministry_id: req.ministryId, created_at: { $gte: startOfMonth() } }),
+    ]);
+
+    res.json({
+      plan: req.ministry.plan,
+      usage: {
+        // "used" mirrors what actually gates a new invite/registration —
+        // active members plus already-pending invites, since a pending
+        // invite is a reserved seat, not an available one.
+        team_members: { used: teamMembers + pendingInvites, active: teamMembers, pending_invites: pendingInvites, limit: limits.team_members },
+        sub_ministries: { used: subMinistries, limit: limits.sub_ministries },
+        flyers_per_month: { used: flyersThisMonth, limit: limits.flyers_per_month },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch plan usage" });
   }
 });
 
@@ -346,6 +381,13 @@ router.post(
       const existing = await Ministry.findOne({ ministry_id });
       if (existing) {
         return res.status(400).json({ error: "Ministry ID already in use" });
+      }
+
+      const subMinistryCount = await Ministry.countDocuments({
+        parent_ministry_id: req.ministryId,
+      });
+      if (subMinistryCount >= limitsFor(req.ministry.plan).sub_ministries) {
+        return res.status(402).json({ error: planLimitError("sub_ministries", req.ministry.plan) });
       }
 
       const subMinistry = await Ministry.create({

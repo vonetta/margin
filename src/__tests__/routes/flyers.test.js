@@ -257,6 +257,75 @@ describe("POST /api/flyers/generate", () => {
   });
 });
 
+describe("plan limits on POST /api/flyers/generate", () => {
+  afterEach(async () => {
+    await Ministry.deleteMany({ ministry_id: "flyer-cap-test" });
+    await Flyer.deleteMany({ ministry_id: "flyer-cap-test" });
+    await User.deleteMany({ email: "flyer-cap-admin@ktm.com" });
+    await Event.deleteMany({ ministry_id: "flyer-cap-test" });
+    await Notification.deleteMany({ ministry_id: "flyer-cap-test" });
+  });
+
+  it("blocks generating a 16th flyer in a month on the small plan (cap 15)", async () => {
+    await Ministry.create({ ministry_id: "flyer-cap-test", name: "Flyer Cap Test", plan: "small" });
+    const admin = await request(app).post("/api/auth/register").send({
+      email: "flyer-cap-admin@ktm.com",
+      password: "Password123",
+      name: "Admin",
+      ministry_id: "flyer-cap-test",
+      role: "admin",
+    });
+    const token = admin.body.token;
+
+    await Flyer.insertMany(
+      Array.from({ length: 15 }, (_, i) => ({
+        ministry_id: "flyer-cap-test",
+        title: `Backfilled Flyer ${i}`,
+        layout: "monument",
+        created_at: new Date(),
+      })),
+    );
+
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "flyer-cap-test")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "One Too Many" });
+    expect(res.status).toBe(402);
+    expect(res.body.error).toContain("small plan allows up to 15 flyers per month");
+  });
+
+  it("does not count flyers created in a prior month toward the cap", async () => {
+    await Ministry.create({ ministry_id: "flyer-cap-test", name: "Flyer Cap Test", plan: "small" });
+    const admin = await request(app).post("/api/auth/register").send({
+      email: "flyer-cap-admin@ktm.com",
+      password: "Password123",
+      name: "Admin",
+      ministry_id: "flyer-cap-test",
+      role: "admin",
+    });
+    const token = admin.body.token;
+
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+    await Flyer.insertMany(
+      Array.from({ length: 15 }, (_, i) => ({
+        ministry_id: "flyer-cap-test",
+        title: `Last Month Flyer ${i}`,
+        layout: "monument",
+        created_at: lastMonth,
+      })),
+    );
+
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "flyer-cap-test")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Fresh Month" });
+    expect(res.status).toBe(201);
+  });
+});
+
 describe("POST /api/flyers/background-preview", () => {
   it("generates and stores one candidate image without attaching it to a flyer", async () => {
     const res = await request(app)

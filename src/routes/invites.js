@@ -4,6 +4,7 @@ const { body, validationResult } = require("express-validator");
 const Invite = require("../models/Invite");
 const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
+const { limitsFor, planLimitError } = require("../services/planLimits");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -64,6 +65,17 @@ router.post(
       });
       if (existingInvite) {
         return res.status(200).json(withLink(existingInvite));
+      }
+
+      // Counts active members plus already-pending invites — otherwise an
+      // admin could invite well past the cap and only find out some of
+      // them can't actually join once each person tries to accept.
+      const [activeMemberCount, pendingInviteCount] = await Promise.all([
+        User.countDocuments({ "ministries.ministry_id": req.ministryId, is_active: true }),
+        Invite.countDocuments({ ministry_id: req.ministryId, status: "pending" }),
+      ]);
+      if (activeMemberCount + pendingInviteCount >= limitsFor(req.ministry.plan).team_members) {
+        return res.status(402).json({ error: planLimitError("team_members", req.ministry.plan) });
       }
 
       const invite = await Invite.create({

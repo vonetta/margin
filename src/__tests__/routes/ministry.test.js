@@ -13,6 +13,7 @@ const AiProfile = require("../../models/AiProfile");
 const User = require("../../models/User");
 const Event = require("../../models/Event");
 const Task = require("../../models/Task");
+const Invite = require("../../models/Invite");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -48,6 +49,7 @@ afterAll(async () => {
   });
   await AiProfile.deleteMany({ ministry_id: "salt-light-test" });
   await Event.deleteMany({ ministry_id: "salt-light-test" });
+  await Invite.deleteMany({ ministry_id: "ktm-test" });
   await Task.deleteMany({ ministry_id: "salt-light-test" });
   await User.deleteMany({
     email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com", "salt-light-member@ktm.com"] },
@@ -66,6 +68,7 @@ beforeEach(async () => {
   });
   await AiProfile.deleteMany({ ministry_id: "salt-light-test" });
   await Event.deleteMany({ ministry_id: "salt-light-test" });
+  await Invite.deleteMany({ ministry_id: "ktm-test" });
   await Task.deleteMany({ ministry_id: "salt-light-test" });
   await User.deleteMany({
     email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com", "salt-light-member@ktm.com"] },
@@ -129,6 +132,47 @@ describe("GET /api/ministry", () => {
       .set("Authorization", `Bearer ${authToken}`);
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/ministry/plan-usage", () => {
+  it("reports null (unlimited) limits for an enterprise plan", async () => {
+    const res = await request(app)
+      .get("/api/ministry/plan-usage")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.plan).toBe("enterprise");
+    expect(res.body.usage.team_members.limit).toBeNull();
+    expect(res.body.usage.sub_ministries.limit).toBeNull();
+    expect(res.body.usage.flyers_per_month.limit).toBeNull();
+  });
+
+  it("counts pending invites toward team_members usage, not just active members", async () => {
+    await request(app)
+      .post("/api/invites")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ email: "usage-invitee@ktm.com" });
+
+    const res = await request(app)
+      .get("/api/ministry/plan-usage")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.body.usage.team_members.pending_invites).toBe(1);
+    expect(res.body.usage.team_members.used).toBe(
+      res.body.usage.team_members.active + 1,
+    );
+  });
+
+  it("is accessible to a team member, not just admin/leader", async () => {
+    const res = await request(app)
+      .get("/api/ministry/plan-usage")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -381,6 +425,63 @@ describe("GET /api/ministry/sub-ministries", () => {
       .set("Authorization", `Bearer ${teamToken}`);
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe("plan limits on POST /api/ministry/sub-ministries", () => {
+  afterEach(async () => {
+    await Ministry.deleteMany({ ministry_id: { $in: ["small-plan-test", "small-sub-a", "small-sub-b", "small-sub-c", "small-sub-d"] } });
+    await User.deleteMany({ email: "small-plan-admin@ktm.com" });
+    await AiProfile.deleteMany({ ministry_id: { $in: ["small-sub-a", "small-sub-b", "small-sub-c"] } });
+  });
+
+  it("blocks a small plan (cap 0) from creating any sub-ministry", async () => {
+    await Ministry.create({ ministry_id: "small-plan-test", name: "Small Plan Test", plan: "small" });
+    const admin = await request(app).post("/api/auth/register").send({
+      email: "small-plan-admin@ktm.com",
+      password: "Password123",
+      name: "Admin",
+      ministry_id: "small-plan-test",
+      role: "admin",
+    });
+
+    const res = await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "small-plan-test")
+      .set("Authorization", `Bearer ${admin.body.token}`)
+      .send({ ministry_id: "small-sub-a", name: "Should Fail" });
+
+    expect(res.status).toBe(402);
+    expect(res.body.error).toContain("small plan allows up to 0 sub-ministries");
+  });
+
+  it("blocks a mid plan from creating a 4th sub-ministry (cap 3)", async () => {
+    await Ministry.create({ ministry_id: "small-plan-test", name: "Mid Plan Test", plan: "mid" });
+    const admin = await request(app).post("/api/auth/register").send({
+      email: "small-plan-admin@ktm.com",
+      password: "Password123",
+      name: "Admin",
+      ministry_id: "small-plan-test",
+      role: "admin",
+    });
+    const token = admin.body.token;
+
+    for (const subId of ["small-sub-a", "small-sub-b", "small-sub-c"]) {
+      const res = await request(app)
+        .post("/api/ministry/sub-ministries")
+        .set("x-ministry-id", "small-plan-test")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ ministry_id: subId, name: subId });
+      expect(res.status).toBe(201);
+    }
+
+    const res = await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "small-plan-test")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ ministry_id: "small-sub-d", name: "Fourth Sub" });
+    expect(res.status).toBe(402);
+    expect(res.body.error).toContain("mid plan allows up to 3 sub-ministries");
   });
 });
 

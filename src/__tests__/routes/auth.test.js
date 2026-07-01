@@ -108,6 +108,29 @@ describe("POST /api/auth/register", () => {
 
     expect(res.body.user.password).toBeUndefined();
   });
+
+  it("blocks registering past a small plan's team member cap (5)", async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app).post("/api/auth/register").send({
+        email: `cap-user-${i}@second.com`,
+        password: "Password123",
+        name: `Cap User ${i}`,
+        ministry_id: "second-test",
+      });
+      expect(res.status).toBe(201);
+    }
+
+    const res = await request(app).post("/api/auth/register").send({
+      email: "cap-user-6@second.com",
+      password: "Password123",
+      name: "Sixth User",
+      ministry_id: "second-test",
+    });
+    expect(res.status).toBe(402);
+    expect(res.body.error).toContain("small plan allows up to 5 team members");
+
+    await User.deleteMany({ email: { $regex: /^cap-user-/ } });
+  });
 });
 
 describe("POST /api/auth/login", () => {

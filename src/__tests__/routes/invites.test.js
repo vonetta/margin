@@ -105,6 +105,46 @@ describe("POST /api/invites", () => {
   });
 });
 
+describe("plan limits on POST /api/invites", () => {
+  afterEach(async () => {
+    await Ministry.deleteMany({ ministry_id: "invite-cap-test" });
+    await Invite.deleteMany({ ministry_id: "invite-cap-test" });
+    await User.deleteMany({ email: { $regex: /@invite-cap\.com$/ } });
+  });
+
+  it("counts active members plus pending invites against the team cap", async () => {
+    await Ministry.create({ ministry_id: "invite-cap-test", name: "Invite Cap Test", plan: "small" });
+    const admin = await request(app).post("/api/auth/register").send({
+      email: "admin@invite-cap.com",
+      password: "Password123",
+      name: "Admin",
+      ministry_id: "invite-cap-test",
+      role: "admin",
+    });
+    const token = admin.body.token;
+
+    // 1 active member (the admin) + 4 pending invites = 5, at the small
+    // plan's cap — a 5th invite should be refused before ever reaching
+    // an inbox.
+    for (let i = 0; i < 4; i++) {
+      const res = await request(app)
+        .post("/api/invites")
+        .set("x-ministry-id", "invite-cap-test")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ email: `invitee-${i}@invite-cap.com` });
+      expect(res.status).toBe(201);
+    }
+
+    const res = await request(app)
+      .post("/api/invites")
+      .set("x-ministry-id", "invite-cap-test")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "one-too-many@invite-cap.com" });
+    expect(res.status).toBe(402);
+    expect(res.body.error).toContain("small plan allows up to 5 team members");
+  });
+});
+
 describe("GET /api/invites", () => {
   it("lists pending invites for this ministry", async () => {
     await Invite.create({

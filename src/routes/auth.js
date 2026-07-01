@@ -6,6 +6,7 @@ const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const Ministry = require("../models/Ministry");
 const Invite = require("../models/Invite");
+const { limitsFor, planLimitError } = require("../services/planLimits");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -53,6 +54,19 @@ router.post(
         return res.status(404).json({ error: "Ministry not found" });
       }
 
+      const existingMemberCount = await User.countDocuments({
+        "ministries.ministry_id": ministry_id,
+        is_active: true,
+      });
+      // Applies to every path onto the roster — self-service registration
+      // and invite acceptance alike — since both end in one more active
+      // membership on this ministry. The very first member is always
+      // exempt (0 < any real limit), so bootstrapping a new ministry
+      // never trips this.
+      if (existingMemberCount >= limitsFor(ministry.plan).team_members) {
+        return res.status(402).json({ error: planLimitError("team_members", ministry.plan) });
+      }
+
       let assignedRole;
       let invite = null;
 
@@ -73,9 +87,6 @@ router.post(
         // very first member may grant themselves elevated access.
         // Everyone after that is "team" unless an admin invites them at a
         // higher role or promotes them via the Team page.
-        const existingMemberCount = await User.countDocuments({
-          "ministries.ministry_id": ministry_id,
-        });
         assignedRole = existingMemberCount === 0 ? role || "admin" : "team";
       }
 
