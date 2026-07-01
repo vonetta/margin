@@ -22,11 +22,20 @@ const inviteRoutes = require("./routes/invites");
 const publicInviteRoutes = require("./routes/publicInvites");
 const socialAuthRoutes = require("./routes/socialAuth");
 const publicSocialCallbackRoutes = require("./routes/publicSocialCallback");
+const socialPostRoutes = require("./routes/socialPosts");
+const { rehydrateScheduledPosts } = require("./services/socialPostScheduler");
 dotenv.config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
 });
 
-connectDB();
+connectDB().then(() => {
+  // In-memory timers don't exist until now — nothing to rehydrate during
+  // tests, and doing it there risks a test's mocked SocialAccount/fetch
+  // setup interacting with a timer that outlives that specific test.
+  if (process.env.NODE_ENV !== "test") {
+    rehydrateScheduledPosts();
+  }
+});
 
 const app = express();
 app.set("trust proxy", 1);
@@ -108,6 +117,7 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/invites", inviteRoutes);
 app.use("/api/social", socialAuthRoutes);
+app.use("/api/social-posts", socialPostRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });
