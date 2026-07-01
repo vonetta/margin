@@ -134,6 +134,39 @@ router.get("/drafts", async (req, res) => {
   }
 });
 
+// PUT /api/communications/drafts/:id — hand-edit the subject/body of an
+// already-saved draft, e.g. to tweak a detail without regenerating the
+// whole thing through the chat flow again.
+router.put(
+  "/drafts/:id",
+  [
+    body("subject").optional().trim().notEmpty(),
+    body("body").optional().trim().notEmpty(),
+    body("recipient_name").optional().trim().notEmpty(),
+    body("recipient_email").optional().trim().isEmail(),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const updates = {};
+      for (const field of ["subject", "body", "recipient_name", "recipient_email"]) {
+        if (req.body[field] !== undefined) updates[field] = req.body[field];
+      }
+
+      const draft = await EmailDraft.findOneAndUpdate(
+        { _id: req.params.id, ministry_id: req.ministryId },
+        updates,
+        { returnDocument: "after", runValidators: true },
+      );
+      if (!draft) return res.status(404).json({ error: "Draft not found" });
+      res.json(draft);
+    } catch (error) {
+      console.error("Email draft update error:", error);
+      res.status(500).json({ error: "Failed to update email draft" });
+    }
+  },
+);
+
 // DELETE /api/communications/drafts/:id
 router.delete("/drafts/:id", async (req, res) => {
   try {

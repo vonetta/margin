@@ -230,6 +230,67 @@ describe("GET /api/communications/drafts", () => {
   });
 });
 
+describe("PUT /api/communications/drafts/:id", () => {
+  it("updates the subject and body of a saved draft", async () => {
+    const draft = await EmailDraft.create({
+      ministry_id: "ktm-test",
+      type: "invitation",
+      recipient_name: "A",
+      subject: "Original Subject",
+      body: "Original body",
+    });
+
+    const res = await request(app)
+      .put(`/api/communications/drafts/${draft._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ subject: "Updated Subject", body: "Updated body" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.subject).toBe("Updated Subject");
+    expect(res.body.body).toBe("Updated body");
+
+    const updated = await EmailDraft.findById(draft._id);
+    expect(updated.subject).toBe("Updated Subject");
+  });
+
+  it("404s for a draft in another ministry", async () => {
+    const draft = await EmailDraft.create({
+      ministry_id: "other-ministry",
+      type: "invitation",
+      recipient_name: "A",
+      subject: "S",
+      body: "B",
+    });
+
+    const res = await request(app)
+      .put(`/api/communications/drafts/${draft._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ subject: "Hijacked" });
+    expect(res.status).toBe(404);
+
+    await EmailDraft.deleteOne({ _id: draft._id });
+  });
+
+  it("rejects an empty subject", async () => {
+    const draft = await EmailDraft.create({
+      ministry_id: "ktm-test",
+      type: "invitation",
+      recipient_name: "A",
+      subject: "S",
+      body: "B",
+    });
+
+    const res = await request(app)
+      .put(`/api/communications/drafts/${draft._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ subject: "" });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("DELETE /api/communications/drafts/:id", () => {
   it("deletes a draft", async () => {
     const draft = await EmailDraft.create({
