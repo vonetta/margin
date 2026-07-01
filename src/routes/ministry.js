@@ -5,8 +5,11 @@ const { body, validationResult } = require("express-validator");
 const Ministry = require("../models/Ministry");
 const AiProfile = require("../models/AiProfile");
 const User = require("../models/User");
+const Event = require("../models/Event");
+const Task = require("../models/Task");
 const { requireRole } = require("../middleware/auth");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
+const { expandEvents } = require("../services/calendarService");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -263,6 +266,54 @@ router.get(
     }
   },
 );
+
+// GET /api/ministry/org-overview — aggregate counts per sub-ministry
+// (team size, pending approvals, open tasks, events in the next 30
+// days), for a parent admin who wants to know what's happening across
+// their org without joining each sub-ministry individually. Deliberately
+// counts only — no event titles, task descriptions, or member emails —
+// so this stays a rollup dashboard rather than a backdoor into a
+// sub-ministry's actual data. Admin-only (stricter than
+// /sub-ministries, which a leader can also see) since this is
+// oversight, not something every leader needs.
+router.get("/org-overview", requireRole("admin"), async (req, res) => {
+  try {
+    const subMinistries = await Ministry.find({
+      parent_ministry_id: req.ministryId,
+    });
+
+    const now = new Date();
+    const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const overview = await Promise.all(
+      subMinistries.map(async (m) => {
+        const [teamCount, pendingApprovals, openTasks, approvedEvents] = await Promise.all([
+          User.countDocuments({
+            "ministries.ministry_id": m.ministry_id,
+            is_active: true,
+          }),
+          Event.countDocuments({ ministry_id: m.ministry_id, status: "pending" }),
+          Task.countDocuments({ ministry_id: m.ministry_id, status: "open" }),
+          Event.find({ ministry_id: m.ministry_id, status: "approved" }),
+        ]);
+
+        return {
+          ministry_id: m.ministry_id,
+          name: m.name,
+          team_count: teamCount,
+          pending_approvals: pendingApprovals,
+          open_tasks: openTasks,
+          upcoming_events: expandEvents(approvedEvents, now, in30Days).length,
+        };
+      }),
+    );
+
+    res.json(overview);
+  } catch (error) {
+    console.error("Org overview error:", error);
+    res.status(500).json({ error: "Failed to build org overview" });
+  }
+});
 
 // POST /api/ministry/sub-ministries
 // Create a new, fully independent tenant linked under the current

@@ -11,6 +11,8 @@ const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const AiProfile = require("../../models/AiProfile");
 const User = require("../../models/User");
+const Event = require("../../models/Event");
+const Task = require("../../models/Task");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -45,8 +47,10 @@ afterAll(async () => {
     ministry_id: { $in: ["ktm-test", "salt-light-test"] },
   });
   await AiProfile.deleteMany({ ministry_id: "salt-light-test" });
+  await Event.deleteMany({ ministry_id: "salt-light-test" });
+  await Task.deleteMany({ ministry_id: "salt-light-test" });
   await User.deleteMany({
-    email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com"] },
+    email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com", "salt-light-member@ktm.com"] },
   });
 });
 
@@ -61,8 +65,10 @@ beforeEach(async () => {
     ministry_id: { $in: ["ktm-test", "salt-light-test"] },
   });
   await AiProfile.deleteMany({ ministry_id: "salt-light-test" });
+  await Event.deleteMany({ ministry_id: "salt-light-test" });
+  await Task.deleteMany({ ministry_id: "salt-light-test" });
   await User.deleteMany({
-    email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com"] },
+    email: { $in: ["ministry-test@ktm.com", "ministry-team-test@ktm.com", "salt-light-member@ktm.com"] },
   });
   await Ministry.create(testMinistry);
 
@@ -375,6 +381,107 @@ describe("GET /api/ministry/sub-ministries", () => {
       .set("Authorization", `Bearer ${teamToken}`);
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe("GET /api/ministry/org-overview", () => {
+  it("returns aggregate counts per sub-ministry without exposing individual records", async () => {
+    await Ministry.create({
+      ministry_id: "salt-light-test",
+      parent_ministry_id: "ktm-test",
+      name: "Salt & Light Test",
+    });
+    const subUser = await request(app).post("/api/auth/register").send({
+      email: "salt-light-member@ktm.com",
+      password: "Password123",
+      name: "Sub Member",
+      ministry_id: "salt-light-test",
+      role: "admin",
+    });
+
+    await Event.create({
+      ministry_id: "salt-light-test",
+      title: "Pending Flyer Event",
+      start: new Date(),
+      status: "pending",
+    });
+    await Event.create({
+      ministry_id: "salt-light-test",
+      title: "Upcoming Approved Event",
+      start: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      status: "approved",
+    });
+    await Task.create({
+      ministry_id: "salt-light-test",
+      title: "Open Task",
+      assigned_to: "someone",
+      assigned_by: "someone",
+      status: "open",
+    });
+
+    const res = await request(app)
+      .get("/api/ministry/org-overview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    const overview = res.body[0];
+    expect(overview.ministry_id).toBe("salt-light-test");
+    expect(overview.name).toBe("Salt & Light Test");
+    expect(overview.team_count).toBe(1);
+    expect(overview.pending_approvals).toBe(1);
+    expect(overview.open_tasks).toBe(1);
+    expect(overview.upcoming_events).toBe(1);
+
+    // Never leaks individual titles/descriptions/emails — counts only.
+    expect(JSON.stringify(overview)).not.toContain("Pending Flyer Event");
+    expect(JSON.stringify(overview)).not.toContain("Upcoming Approved Event");
+    expect(JSON.stringify(overview)).not.toContain("Open Task");
+    expect(JSON.stringify(overview)).not.toContain("salt-light-member@ktm.com");
+    expect(subUser.status).toBe(201);
+  });
+
+  it("counts a recurring event's occurrences within the 30-day window, not just its anchor date", async () => {
+    await Ministry.create({
+      ministry_id: "salt-light-test",
+      parent_ministry_id: "ktm-test",
+      name: "Salt & Light Test",
+    });
+
+    // Anchor date is in the past, but the weekly recurrence still
+    // produces occurrences inside the next 30 days.
+    await Event.create({
+      ministry_id: "salt-light-test",
+      title: "Weekly Prayer Call",
+      start: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+      recurrence_rule: "FREQ=WEEKLY",
+      status: "approved",
+    });
+
+    const res = await request(app)
+      .get("/api/ministry/org-overview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.body[0].upcoming_events).toBeGreaterThanOrEqual(4);
+  });
+
+  it("rejects a leader (admin-only, stricter than /sub-ministries)", async () => {
+    const res = await request(app)
+      .get("/api/ministry/org-overview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("returns an empty array when there are no sub-ministries", async () => {
+    const res = await request(app)
+      .get("/api/ministry/org-overview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
   });
 });
 

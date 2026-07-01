@@ -43,16 +43,26 @@ app.use(
 );
 app.use(express.json({ limit: "10kb" }));
 
+// Real request patterns don't apply in tests — a single test file can
+// legitimately fire more requests in seconds than a real client would in
+// 15 minutes (e.g. re-registering fixture users in every test's
+// beforeEach), so the limiter would otherwise start rejecting requests
+// partway through a run and produce failures that have nothing to do
+// with the behavior under test.
+const skip = () => process.env.NODE_ENV === "test";
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: "Too many requests, please try again later" },
+  skip,
 });
 
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: "Too many generation requests, please slow down" },
+  skip,
 });
 
 app.use("/api", limiter);
