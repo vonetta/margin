@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const Ministry = require("../models/Ministry");
+const Invite = require("../models/Invite");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -40,26 +41,43 @@ router.post(
       .optional()
       .isIn(["admin", "leader", "team"])
       .withMessage("Invalid role"),
+    body("invite_token").optional().trim(),
   ],
   validate,
   async (req, res) => {
     try {
-      const { email, password, name, ministry_id, role } = req.body;
+      const { email, password, name, ministry_id, role, invite_token } = req.body;
 
       const ministry = await Ministry.findOne({ ministry_id });
       if (!ministry) {
         return res.status(404).json({ error: "Ministry not found" });
       }
 
-      // Self-service registration has no invite flow yet, so anyone who
-      // knows a ministry_id can join it — but only the very first member
-      // may grant themselves elevated access. Everyone after that is
-      // added as "team" regardless of what they request; an existing
-      // admin/leader must promote them via PUT /api/people or similar.
-      const existingMemberCount = await User.countDocuments({
-        "ministries.ministry_id": ministry_id,
-      });
-      const assignedRole = existingMemberCount === 0 ? role || "admin" : "team";
+      let assignedRole;
+      let invite = null;
+
+      if (invite_token) {
+        invite = await Invite.findOne({ token: invite_token, ministry_id, status: "pending" });
+        if (!invite || invite.expires_at < new Date()) {
+          return res.status(400).json({ error: "This invite is invalid or has expired" });
+        }
+        if (invite.email !== email) {
+          return res.status(400).json({ error: "This invite was sent to a different email address" });
+        }
+        // The whole point of an invite: the admin who sent it decided the
+        // role, not whatever the registration form happens to submit.
+        assignedRole = invite.role;
+      } else {
+        // Self-service registration without an invite still works (e.g. a
+        // ministry sharing its own ministry_id directly) — but only the
+        // very first member may grant themselves elevated access.
+        // Everyone after that is "team" unless an admin invites them at a
+        // higher role or promotes them via the Team page.
+        const existingMemberCount = await User.countDocuments({
+          "ministries.ministry_id": ministry_id,
+        });
+        assignedRole = existingMemberCount === 0 ? role || "admin" : "team";
+      }
 
       const hashedPassword = await bcrypt.hash(password, 12);
 
@@ -81,6 +99,12 @@ router.post(
           name,
           ministries: [{ ministry_id, role: assignedRole }],
         });
+      }
+
+      if (invite) {
+        invite.status = "accepted";
+        invite.accepted_at = new Date();
+        await invite.save();
       }
 
       const token = signToken(user._id);
