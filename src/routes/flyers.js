@@ -14,6 +14,7 @@ const {
   buildLiteralPrompt,
 } = require("../services/backgroundSelector");
 const { generateBackground } = require("../services/imageService");
+const { generateAiFlyer } = require("../services/aiFlyerService");
 const Background = require("../models/Background");
 const Event = require("../models/Event");
 const { parseFlyerDate } = require("../services/calendarService");
@@ -108,6 +109,7 @@ router.post(
       .withMessage("highlights must be an array"),
     body("platform").optional().trim(),
     body("background_url").optional().trim(),
+    body("engine").optional().isIn(["template", "ai"]).withMessage("Invalid engine"),
   ],
   validate,
   async (req, res) => {
@@ -137,6 +139,7 @@ router.post(
         layout,
         platform,
         background_url,
+        engine = "template",
       } = req.body;
 
       // Always clamped to safe ranges regardless of where it came from —
@@ -195,47 +198,87 @@ router.post(
         backgroundUrl: background_url || null,
       };
 
-      // Generate both sizes
-      const social = await generateFlyer({ ...baseArgs, size: "social" });
-      const print = await generateFlyer({
-        ...baseArgs,
-        size: "print",
-        backgroundUrl: null,
-      });
+      let flyer;
 
-      // Save both to R2
-      const socialUp = await uploadFile({
-        ministryId: req.ministryId,
-        category: "flyers",
-        buffer: social.png,
-        contentType: "image/png",
-        originalName: `${title}-social`,
-      });
-      const printUp = await uploadFile({
-        ministryId: req.ministryId,
-        category: "flyers",
-        buffer: print.png,
-        contentType: "image/png",
-        originalName: `${title}-print`,
-      });
+      if (engine === "ai") {
+        // A single full-image generation, not layout-driven — there's no
+        // print size here since that would mean a second, independently
+        // generated image (double the cost, different composition) rather
+        // than a resize of the same one.
+        const social = await generateAiFlyer({
+          branding: ministry?.branding || {},
+          content,
+          host,
+          speakers,
+          qrUrl: qr_url || null,
+          size: "social",
+        });
 
-      // Store the record
-      const flyer = await Flyer.create({
-        ministry_id: req.ministryId,
-        title,
-        layout: social.meta.layout,
-        tone: social.meta.tone,
-        social_url: socialUp.url,
-        social_key: socialUp.key,
-        print_url: printUp.url,
-        print_key: printUp.key,
-        content,
-        host_id: host_id || null,
-        speaker_ids,
-        background_id: social.meta.background_id || null,
-        qr_url: qr_url || null,
-        created_by: req.userId,
-      });
+        const socialUp = await uploadFile({
+          ministryId: req.ministryId,
+          category: "flyers",
+          buffer: social.png,
+          contentType: "image/png",
+          originalName: `${title}-social-ai`,
+        });
+
+        flyer = await Flyer.create({
+          ministry_id: req.ministryId,
+          title,
+          layout: "ai",
+          engine: "ai",
+          social_url: socialUp.url,
+          social_key: socialUp.key,
+          content,
+          host_id: host_id || null,
+          speaker_ids,
+          qr_url: qr_url || null,
+          created_by: req.userId,
+        });
+      } else {
+        // Generate both sizes
+        const social = await generateFlyer({ ...baseArgs, size: "social" });
+        const print = await generateFlyer({
+          ...baseArgs,
+          size: "print",
+          backgroundUrl: null,
+        });
+
+        // Save both to R2
+        const socialUp = await uploadFile({
+          ministryId: req.ministryId,
+          category: "flyers",
+          buffer: social.png,
+          contentType: "image/png",
+          originalName: `${title}-social`,
+        });
+        const printUp = await uploadFile({
+          ministryId: req.ministryId,
+          category: "flyers",
+          buffer: print.png,
+          contentType: "image/png",
+          originalName: `${title}-print`,
+        });
+
+        // Store the record
+        flyer = await Flyer.create({
+          ministry_id: req.ministryId,
+          title,
+          layout: social.meta.layout,
+          engine: "template",
+          tone: social.meta.tone,
+          social_url: socialUp.url,
+          social_key: socialUp.key,
+          print_url: printUp.url,
+          print_key: printUp.key,
+          content,
+          host_id: host_id || null,
+          speaker_ids,
+          background_id: social.meta.background_id || null,
+          qr_url: qr_url || null,
+          created_by: req.userId,
+        });
+      }
 
       // Best-effort: get the event onto the calendar as something a human
       // confirms, rather than requiring it be entered a second time by

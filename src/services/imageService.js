@@ -75,6 +75,53 @@ const removeBackground = async (imageBuffer, mimeType = "image/jpeg") => {
   return Buffer.from(imagePart.inlineData.data, "base64");
 };
 
+// Generate a full, designer-style flyer image with text baked in directly
+// by the model, optionally grounded with reference photos (host/speaker
+// headshots, logo) so it can incorporate real people/marks instead of
+// inventing generic ones. Returns a PNG buffer.
+const generateFullFlyer = async (
+  prompt,
+  referenceImages = [],
+  { aspectRatio = "4:5" } = {},
+) => {
+  if (!prompt || !prompt.trim()) {
+    throw new Error("A prompt is required to generate a flyer");
+  }
+
+  const model = getClient().getGenerativeModel({ model: MODEL_ID });
+
+  const imageParts = referenceImages
+    .filter((img) => img && img.buffer)
+    .map((img) => ({
+      inlineData: {
+        mimeType: img.mimeType || "image/jpeg",
+        data: img.buffer.toString("base64"),
+      },
+    }));
+
+  const result = await model.generateContent({
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt.trim() }, ...imageParts],
+      },
+    ],
+    generationConfig: {
+      responseModalities: ["Image"],
+      imageConfig: { aspectRatio },
+    },
+  });
+
+  const parts = result.response.candidates?.[0]?.content?.parts || [];
+  const imagePart = parts.find((p) => p.inlineData);
+
+  if (!imagePart) {
+    throw new Error("No image returned from Gemini");
+  }
+
+  return Buffer.from(imagePart.inlineData.data, "base64");
+};
+
 // Read an already-made flyer image and extract its event details as JSON,
 // so a caption can be written without asking the user to retype facts
 // that are already on the flyer.
@@ -125,5 +172,6 @@ module.exports = {
   generateBackground,
   removeBackground,
   extractFlyerDetails,
+  generateFullFlyer,
   MODEL_ID,
 };

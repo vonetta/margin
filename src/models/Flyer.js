@@ -5,6 +5,9 @@ const flyerSchema = new mongoose.Schema({
   title: { type: String, required: true },
   layout: { type: String, required: true },
   tone: { type: String },
+  // "template" = the deterministic HTML/CSS + Puppeteer pipeline,
+  // "ai" = a full flyer image generated directly by an image model.
+  engine: { type: String, enum: ["template", "ai"], default: "template" },
   // rendered outputs
   social_url: { type: String },
   social_key: { type: String },
