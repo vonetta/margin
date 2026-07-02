@@ -19,7 +19,7 @@ const { generateContent } = require("../services/generationService");
 const ContentDraft = require("../models/ContentDraft");
 const Background = require("../models/Background");
 const Event = require("../models/Event");
-const { parseFlyerDate } = require("../services/calendarService");
+const { parseFlyerDate, formatFriendlyDate } = require("../services/calendarService");
 const { notifyEventPendingApproval } = require("../services/notificationService");
 const { limitsFor, planLimitError, startOfMonth } = require("../services/planLimits");
 
@@ -179,7 +179,7 @@ router.post(
         theme_tags,
         highlights,
         audience,
-        date,
+        date: formatFriendlyDate(date),
         location,
         cost,
         cta,

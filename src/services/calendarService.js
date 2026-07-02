@@ -118,6 +118,27 @@ const buildPublicCalendarFeed = (ministry, events, { from, to }) => {
   return calendar.toString();
 };
 
+// The flyer wizard's date picker is a bare <input type="date">, which
+// submits "YYYY-MM-DD" — fine as data, but rendered verbatim on a flyer
+// (template or AI-generated) it reads as raw system output, not something
+// a designer typed. Reformat only that exact bare-ISO shape; anything
+// already free text (e.g. "Sunday, August 2 · 6:00 PM" from an API call)
+// is left untouched rather than risk mangling it.
+const formatFriendlyDate = (raw) => {
+  if (!raw || typeof raw !== "string") return raw;
+  const match = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return raw;
+  const [, y, m, d] = match;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
 module.exports = {
   buildRule,
   isValidRecurrenceRule,
@@ -126,4 +147,5 @@ module.exports = {
   parseFlyerDate,
   buildPublicCalendarFeed,
   nextOccurrenceAfter,
+  formatFriendlyDate,
 };

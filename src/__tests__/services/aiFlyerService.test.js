@@ -27,15 +27,33 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("#DAAE4F");
   });
 
-  it("mentions incorporating a reference photo when a host is present", () => {
+  it("mentions incorporating a reference photo when a host reference image is present", () => {
     const prompt = buildFullFlyerPrompt({
       branding: {},
       content: { title: "Worship Intensive" },
-      host: { name: "Apostle Khy" },
-      speakers: [],
+      referenceImages: [{ role: "host", name: "Apostle Khy" }],
     });
     expect(prompt).toContain("Apostle Khy");
-    expect(prompt).toContain("reference photo");
+    expect(prompt).toContain("real photo");
+  });
+
+  it("instructs the model to reproduce an attached logo exactly, not invent one", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: {},
+      content: { title: "Worship Intensive" },
+      referenceImages: [{ role: "logo", name: null }],
+    });
+    expect(prompt).toContain("OFFICIAL LOGO");
+    expect(prompt).toContain("do not redesign");
+  });
+
+  it("tells the model not to leave large empty dead space", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: {},
+      content: { title: "Worship Intensive" },
+      referenceImages: [],
+    });
+    expect(prompt).toContain("no large empty single-color areas");
   });
 });
 

@@ -5,6 +5,7 @@ const {
   parseFlyerDate,
   buildPublicCalendarFeed,
   nextOccurrenceAfter,
+  formatFriendlyDate,
 } = require("../../services/calendarService");
 
 const makeEvent = (overrides = {}) => ({
@@ -167,5 +168,22 @@ describe("nextOccurrenceAfter", () => {
       new Date("2026-06-02T18:00:00Z"),
     );
     expect(next).toBeNull();
+  });
+});
+
+describe("formatFriendlyDate", () => {
+  it("reformats a bare YYYY-MM-DD (from the <input type=date> picker) into a readable date", () => {
+    expect(formatFriendlyDate("2026-07-16")).toBe("Thursday, July 16, 2026");
+  });
+
+  it("leaves already-free-text dates untouched", () => {
+    expect(formatFriendlyDate("Sunday, August 2 · 6:00 PM")).toBe(
+      "Sunday, August 2 · 6:00 PM",
+    );
+  });
+
+  it("passes through empty/nullish input unchanged", () => {
+    expect(formatFriendlyDate("")).toBe("");
+    expect(formatFriendlyDate(undefined)).toBeUndefined();
   });
 });

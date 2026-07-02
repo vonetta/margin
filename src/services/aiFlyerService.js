@@ -36,20 +36,44 @@ const fetchImageReference = async (url) => {
 // attention imitating photos instead of designing the flyer.
 const MAX_REFERENCE_IMAGES = 4;
 
+// Each reference keeps a role/name label alongside its image data, so the
+// prompt can tell the model exactly what each attached image IS (e.g. "the
+// second image is your official logo, reproduce it exactly") instead of
+// leaving it to guess — which is how a generic invented logo/cross icon
+// replaces the ministry's actual mark.
 const gatherReferenceImages = async ({ branding, host, speakers }) => {
   const candidates = [
-    branding?.logo_url,
-    host?.cutout_url || host?.headshot_url,
-    ...speakers.map((s) => s.cutout_url || s.headshot_url),
+    branding?.logo_url && { role: "logo", name: null, url: branding.logo_url },
+    host && (host.cutout_url || host.headshot_url)
+      ? { role: "host", name: host.name, url: host.cutout_url || host.headshot_url }
+      : null,
+    ...speakers
+      .filter((s) => s.cutout_url || s.headshot_url)
+      .map((s) => ({ role: "speaker", name: s.name, url: s.cutout_url || s.headshot_url })),
   ].filter(Boolean);
 
-  const results = await Promise.all(
-    candidates.slice(0, MAX_REFERENCE_IMAGES).map(fetchImageReference),
+  const fetched = await Promise.all(
+    candidates.slice(0, MAX_REFERENCE_IMAGES).map(async (c) => {
+      const img = await fetchImageReference(c.url);
+      return img ? { ...c, ...img } : null;
+    }),
   );
-  return results.filter(Boolean);
+  return fetched.filter(Boolean);
 };
 
-const buildFullFlyerPrompt = ({ branding = {}, content = {}, host, speakers = [] }) => {
+const describeReferenceImages = (referenceImages) =>
+  referenceImages
+    .map((ref, i) => {
+      const n = i + 1;
+      if (ref.role === "logo") {
+        return `Attached image ${n} is the organization's OFFICIAL LOGO — reproduce it exactly as given (same mark, same colors), do not redesign, restyle, or invent a substitute logo.`;
+      }
+      const roleLabel = ref.role === "host" ? "the host" : "a speaker";
+      return `Attached image ${n} is a real photo of ${ref.name || roleLabel} (${roleLabel}) — incorporate their actual likeness naturally into the design (a portrait cutout, a circular frame, or similar), don't replace them with a generic stand-in.`;
+    })
+    .join("\n");
+
+const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [] }) => {
   const colors = branding.colors || {};
   const palette = [
     colors.primary && `deep primary ${colors.primary}`,
@@ -76,21 +100,18 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, host, speakers = []
     .filter(Boolean)
     .join("\n");
 
-  const peopleLine =
-    host || speakers.length
-      ? `A reference photo is attached for ${[host?.name, ...speakers.map((s) => s.name)].filter(Boolean).join(" and ")} — incorporate ${host ? "them" : "these speakers"} naturally into the design (a portrait cutout, a circular frame, or similar), keeping their likeness recognizable rather than replacing them with a generic stand-in.`
-      : "";
+  const referenceLine = describeReferenceImages(referenceImages);
 
   return `Design a polished, professional event flyer image for a church/ministry organization${branding.name ? ` called ${branding.name}` : ""}, portrait orientation.
 
 Brand colors: ${palette || "a tasteful, cohesive palette"}. ${fontLine}
 
-Event details — render this text EXACTLY as written, spelled correctly, no typos, no invented details beyond what's listed:
+Event details — render this text EXACTLY as written, spelled correctly, no typos, no garbled or illegible letters, no invented details beyond what's listed. Use proper title case or sentence case for the title and headlines — never render headline text in all-lowercase:
 ${textLines}
 
-${peopleLine}
+${referenceLine}
 
-Design direction: sophisticated, editorial event-flyer design — think a well-designed gala or church-event invitation, not a generic template. Use tasteful typography hierarchy, generous negative space, a refined color-blocked or gradient background using the brand palette, and a subtle decorative element (fine linework, a gold accent divider, or a soft abstract texture). No stock-photo clutter, no placeholder people beyond the reference photos provided. Leave a clear, uncluttered area in the bottom third free of text or important detail — a QR code will be added there afterward. This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
+Design direction: sophisticated, editorial event-flyer design — think a well-designed gala or church-event invitation, not a generic template. Use tasteful typography hierarchy and a refined color-blocked or gradient background using the brand palette. Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements (fine linework, a gold accent divider, a soft abstract pattern) across the entire composition. No stock-photo clutter, no placeholder people beyond the reference photos provided. Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward. This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
 };
 
 // Composites a real, guaranteed-scannable QR code onto the generated image
@@ -145,7 +166,7 @@ const generateAiFlyer = async ({
   size = "social",
 }) => {
   const referenceImages = await gatherReferenceImages({ branding, host, speakers });
-  const prompt = buildFullFlyerPrompt({ branding, content, host, speakers });
+  const prompt = buildFullFlyerPrompt({ branding, content, referenceImages });
   const aspectRatio = ASPECT_RATIO_BY_SIZE[size] || ASPECT_RATIO_BY_SIZE.social;
 
   let png = await generateFullFlyer(prompt, referenceImages, { aspectRatio });
