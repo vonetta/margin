@@ -16,6 +16,7 @@ const {
 const { generateBackground } = require("../services/imageService");
 const { generateAiFlyer } = require("../services/aiFlyerService");
 const { generateContent } = require("../services/generationService");
+const { withApprovedSops } = require("../services/sopService");
 const ContentDraft = require("../models/ContentDraft");
 const Background = require("../models/Background");
 const Event = require("../models/Event");
@@ -353,7 +354,8 @@ router.post(
       ].filter(Boolean);
       const prompt = promptLines.join("\n");
 
-      const caption = await generateContent(prompt, profile, req.ministry, platform);
+      const profileWithSops = await withApprovedSops(profile, req.ministryId);
+      const caption = await generateContent(prompt, profileWithSops, req.ministry, platform);
 
       const draft = await ContentDraft.create({
         ministry_id: req.ministryId,

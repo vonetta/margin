@@ -1,8 +1,25 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
 const { body, validationResult } = require("express-validator");
 const AiProfile = require("../models/AiProfile");
+const SopDraft = require("../models/SopDraft");
 const { requireRole } = require("../middleware/auth");
+const { uploadFile, safeDeleteFile } = require("../services/storageService");
+const { draftSopFromImages } = require("../services/imageService");
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 8 }, // 5MB per image, 8 images per batch
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
+    }
+  },
+});
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -293,5 +310,154 @@ router.post(
     }
   },
 );
+
+// POST /api/profile/sops/draft — draft an SOP from a batch of images + a
+// shared notes field via Gemini vision. Saved as pending_review — it does
+// NOT touch AiProfile.sops, so it can't influence content generation until
+// an admin/leader approves it below.
+router.post(
+  "/sops/draft",
+  requireRole("admin", "leader"),
+  upload.array("images", 8),
+  [body("notes").optional().trim()],
+  validate,
+  async (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: "At least one image is required" });
+      }
+
+      const draft = await draftSopFromImages(
+        req.files.map((f) => ({ buffer: f.buffer, mimeType: f.mimetype })),
+        req.body.notes || "",
+      );
+
+      const uploads = await Promise.all(
+        req.files.map((f, i) =>
+          uploadFile({
+            ministryId: req.ministryId,
+            category: "sop-sources",
+            buffer: f.buffer,
+            contentType: f.mimetype,
+            originalName: `sop-source-${i}`,
+          }),
+        ),
+      );
+
+      const sopDraft = await SopDraft.create({
+        ministry_id: req.ministryId,
+        notes: req.body.notes || "",
+        image_urls: uploads.map((u) => u.url),
+        image_keys: uploads.map((u) => u.key),
+        title: draft.title,
+        content: draft.content,
+        status: "pending_review",
+        created_by: req.userId,
+      });
+
+      res.status(201).json(sopDraft);
+    } catch (error) {
+      console.error("SOP draft generation error:", error);
+      res.status(500).json({ error: "Failed to draft an SOP from these images" });
+    }
+  },
+);
+
+// GET /api/profile/sops/drafts — list, optionally filtered by status
+router.get("/sops/drafts", async (req, res) => {
+  try {
+    const filter = { ministry_id: req.ministryId };
+    if (req.query.status) filter.status = req.query.status;
+    const drafts = await SopDraft.find(filter).sort({ created_at: -1 });
+    res.json(drafts);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch SOP drafts" });
+  }
+});
+
+// PUT /api/profile/sops/drafts/:id — edit title/content (the "tweak" step)
+router.put(
+  "/sops/drafts/:id",
+  requireRole("admin", "leader"),
+  [
+    body("title").optional().trim().notEmpty().withMessage("Title cannot be empty"),
+    body("content").optional().trim().notEmpty().withMessage("Content cannot be empty"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const updates = {};
+      if (req.body.title !== undefined) updates.title = req.body.title;
+      if (req.body.content !== undefined) updates.content = req.body.content;
+
+      const draft = await SopDraft.findOneAndUpdate(
+        { _id: req.params.id, ministry_id: req.ministryId },
+        { $set: updates },
+        { returnDocument: "after", runValidators: true },
+      );
+
+      if (!draft) return res.status(404).json({ error: "SOP draft not found" });
+      res.json(draft);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update SOP draft" });
+    }
+  },
+);
+
+// PUT /api/profile/sops/drafts/:id/approve
+router.put(
+  "/sops/drafts/:id/approve",
+  requireRole("admin", "leader"),
+  async (req, res) => {
+    try {
+      const draft = await SopDraft.findOneAndUpdate(
+        { _id: req.params.id, ministry_id: req.ministryId },
+        { $set: { status: "approved", approved_by: req.userId, approved_at: new Date() } },
+        { returnDocument: "after" },
+      );
+
+      if (!draft) return res.status(404).json({ error: "SOP draft not found" });
+      res.json(draft);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to approve SOP draft" });
+    }
+  },
+);
+
+// PUT /api/profile/sops/drafts/:id/reject
+router.put(
+  "/sops/drafts/:id/reject",
+  requireRole("admin", "leader"),
+  async (req, res) => {
+    try {
+      const draft = await SopDraft.findOneAndUpdate(
+        { _id: req.params.id, ministry_id: req.ministryId },
+        { $set: { status: "rejected" } },
+        { returnDocument: "after" },
+      );
+
+      if (!draft) return res.status(404).json({ error: "SOP draft not found" });
+      res.json(draft);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reject SOP draft" });
+    }
+  },
+);
+
+// DELETE /api/profile/sops/drafts/:id
+router.delete("/sops/drafts/:id", requireRole("admin", "leader"), async (req, res) => {
+  try {
+    const draft = await SopDraft.findOne({ _id: req.params.id, ministry_id: req.ministryId });
+    if (!draft) return res.status(404).json({ error: "SOP draft not found" });
+
+    for (const key of draft.image_keys) {
+      await safeDeleteFile(key);
+    }
+    await SopDraft.deleteOne({ _id: draft._id });
+    res.json({ deleted: true, id: req.params.id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete SOP draft" });
+  }
+});
 
 module.exports = router;

@@ -4,6 +4,7 @@ const multer = require("multer");
 const { body, validationResult } = require("express-validator");
 const { generateContent, chatTurn } = require("../services/generationService");
 const { extractFlyerDetails } = require("../services/imageService");
+const { withApprovedSops } = require("../services/sopService");
 const AiProfile = require("../models/AiProfile");
 const ContentDraft = require("../models/ContentDraft");
 const Ministry = require("../models/Ministry");
@@ -57,9 +58,10 @@ router.post(
 
       const { prompt, platform } = req.body;
 
+      const profileWithSops = await withApprovedSops(profile, req.ministryId);
       const generatedCaption = await generateContent(
         prompt,
-        profile,
+        profileWithSops,
         req.ministry,
         platform,
       );
@@ -132,8 +134,9 @@ router.post(
         "ministry_id name",
       );
 
+      const profileWithSops = await withApprovedSops(profile, req.ministryId);
       const result = await chatTurn({
-        profile,
+        profile: profileWithSops,
         ministry: req.ministry,
         platform,
         messages,
