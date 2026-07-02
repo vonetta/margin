@@ -251,7 +251,7 @@ describe("POST /api/profile/feedback", () => {
 });
 
 describe("POST /api/profile/sops", () => {
-  it("adds a new SOP chunk", async () => {
+  it("adds a new SOP as a pending_review draft, same review gate as an AI-drafted one", async () => {
     const res = await request(app)
       .post("/api/profile/sops")
       .set("x-ministry-id", "ktm-test")
@@ -264,6 +264,7 @@ describe("POST /api/profile/sops", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.title).toBe("Worship Workshop SOP");
+    expect(res.body.status).toBe("pending_review");
   });
 
   it("rejects SOP with missing content", async () => {

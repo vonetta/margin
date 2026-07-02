@@ -275,7 +275,10 @@ router.post(
 );
 
 // POST /api/profile/sops
-// Add a new SOP chunk
+// Add an SOP you already wrote (not AI-drafted) — still lands as
+// pending_review, same as an AI-drafted one, so every SOP passes through
+// the same one-click review gate before it can affect content generation,
+// regardless of how it got in.
 router.post(
   "/sops",
   requireRole("admin", "leader"),
@@ -287,24 +290,16 @@ router.post(
   validate,
   async (req, res) => {
     try {
-      const sop = {
+      const sopDraft = await SopDraft.create({
+        ministry_id: req.ministryId,
         title: req.body.title,
         content: req.body.content,
         tags: req.body.tags || [],
-        updated_at: new Date(),
-      };
+        status: "pending_review",
+        created_by: req.userId,
+      });
 
-      const profile = await AiProfile.findOneAndUpdate(
-        { ministry_id: req.ministryId },
-        { $push: { sops: sop } },
-        { returnDocument: "after" },
-      );
-
-      if (!profile) {
-        return res.status(404).json({ error: "AI profile not found" });
-      }
-
-      res.status(201).json(sop);
+      res.status(201).json(sopDraft);
     } catch (error) {
       res.status(500).json({ error: "Failed to add SOP" });
     }
