@@ -269,6 +269,30 @@ describe("suggestLayout", () => {
     expect((html.match(/photo-card/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
+  it("collage doesn't leave a dead empty zone when no one has a photo", () => {
+    const html = renderLayout("collage", {
+      content: { title: "Worship Intensive", date: "August 15", location: "Los Angeles" },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+    });
+    expect(html).not.toContain('<div class="photo-card"');
+    // Falls back to a centered title over a textured background instead of
+    // a fixed bottom offset that leaves an empty top half.
+    expect(html).toContain("top: 50%");
+  });
+
+  it("collage badge never falls back to CTA text and stays on-brand gold", () => {
+    const html = renderLayout("collage", {
+      content: {
+        title: "Worship Intensive",
+        cta: "Secure your spot at google.com",
+      },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+      style: { color_variant: "triad" },
+    });
+    expect(html).not.toContain('<div class="seal-slot"');
+    expect(html).not.toContain("google.com");
+  });
+
   it("suggests collage for a warm/energetic tone with multiple people photos", () => {
     const id = suggestLayout({
       speakers: [{ headshot_url: "a.jpg" }, { headshot_url: "b.jpg" }],

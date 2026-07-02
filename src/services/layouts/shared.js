@@ -244,8 +244,13 @@ const gradientTextStyle = (colors, angle = 100) => {
 // tag (which is for short single-line role labels like HOST).
 const renderSeal = (text, { bg, color = "#fff", size = 120, ring } = {}) => {
   if (!text) return "";
-  return `<div class="seal" style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;text-align:center;padding:${Math.round(size * 0.12)}px;border:3px solid ${ring || hexToRgba(color, 0.55)};box-shadow:0 8px 22px rgba(0,0,0,0.3);flex-shrink:0;">
-    <span style="font-size:${Math.round(size * 0.105)}px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;line-height:1.2;color:${color};">${escapeHtml(text)}</span>
+  // Scale the font down for longer labels so a seal never overflows its
+  // own circle — a short word ("HOST") and a longer phrase ("Members
+  // Only Event") both need to fit inside the same fixed-diameter badge.
+  const len = String(text).length;
+  const scale = len > 24 ? 0.75 : len > 14 ? 0.88 : 1;
+  return `<div class="seal" style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;text-align:center;padding:${Math.round(size * 0.12)}px;border:3px solid ${ring || hexToRgba(color, 0.55)};box-shadow:0 8px 22px rgba(0,0,0,0.3);flex-shrink:0;overflow:hidden;">
+    <span style="font-size:${Math.round(size * 0.105 * scale)}px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;line-height:1.2;color:${color};">${escapeHtml(text)}</span>
   </div>`;
 };
 
