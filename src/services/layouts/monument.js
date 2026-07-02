@@ -9,6 +9,9 @@ const {
   renderLogo,
   abstractLinesOverlay,
   deriveColorVariants,
+  iconForLabel,
+  renderIconBadge,
+  gradientTextStyle,
 } = require("./shared");
 const { validateStyle } = require("./styleSchema");
 
@@ -156,10 +159,10 @@ const render = ({
     : "";
 
   const metaItems = [
-    dateLine && { icon: "📅", label: "When", value: dateLine },
-    location && { icon: "📍", label: "Where", value: location },
-    cost && { icon: "💰", label: "Cost", value: cost },
-    audience && { icon: "👥", label: "For", value: audience },
+    dateLine && { label: "When", value: dateLine },
+    location && { label: "Where", value: location },
+    cost && { label: "Cost", value: cost },
+    audience && { label: "For", value: audience },
   ].filter(Boolean);
 
   const tagPills =
@@ -181,7 +184,7 @@ const render = ({
   const metaRow = metaItems.length
     ? `<div class="meta-row">${metaItems
         .map(
-          (m, i) => `${i > 0 ? '<span class="meta-divider"></span>' : ""}<div class="meta-item"><span class="meta-icon">${m.icon}</span><div><div class="meta-label">${escapeHtml(m.label)}</div><div class="meta-value">${m.value}</div></div></div>`,
+          (m, i) => `${i > 0 ? '<span class="meta-divider"></span>' : ""}<div class="meta-item">${renderIconBadge(iconForLabel(m.label), { size: 36, bg: primary, color: "#fff" })}<div><div class="meta-label">${escapeHtml(m.label)}</div><div class="meta-value">${m.value}</div></div></div>`,
         )
         .join("")}</div>`
     : "";
@@ -195,7 +198,7 @@ const render = ({
     html, body { width: ${dims.width}px; height: ${dims.height}px; }
     body { font-family: '${body}', sans-serif; overflow: hidden; display: flex; flex-direction: column; background: ${bg}; }
     .top-zone { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; ${hasSpeakers ? "flex: 0 0 auto; min-height: 520px;" : "flex: 1; min-height: 0;"} ${photoZoneBg} }
-    .text-scrim { position: absolute; top: 0; left: 0; bottom: 0; width: 58%; background: linear-gradient(90deg, ${bg} 0%, ${bg} 42%, ${hexToRgba(bg, 0)} 100%); z-index: 1; }
+    .text-scrim { position: absolute; top: 0; left: 0; bottom: 0; width: 58%; background: linear-gradient(90deg, ${bg} 0%, ${bg} 52%, ${hexToRgba(bg, 0)} 88%); z-index: 1; }
     .photo-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; z-index: 2; }
     .host-circle-wrap { position: relative; display: inline-block; }
     .host-circle-wrap .ribbon { position: absolute; top: -6px; right: -16px; }
@@ -207,8 +210,8 @@ const render = ({
     .logo-backing-circle { background: #fff; border-radius: 50%; padding: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
     .logo-backing-pill { background: #fff; border-radius: 999px; padding: 10px 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
     .photo-corner-logo { position: absolute; top: 20px; right: 20px; z-index: 3; }
-    .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; }
-    .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${accent}; line-height: 1; margin-top: 8px; }
+    .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; text-shadow: 0 2px 14px ${hexToRgba(bg, 0.5)}; }
+    .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; line-height: 1; margin-top: 8px; ${gradientTextStyle({ primary, accent, gold })} filter: drop-shadow(0 2px 10px ${hexToRgba(bg, 0.55)}); }
     .desc { font-size: ${s.description_size}px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
     .tag-row { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
     .tag-pill { display: inline-block; padding: 7px 18px; border-radius: 20px; border: 1.5px solid ${hexToRgba(primary, 0.5)}; color: ${primary}; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -230,7 +233,6 @@ const render = ({
     .highlight-mark { color: ${gold}; font-weight: 700; flex-shrink: 0; }
     .meta-row { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 18px 0; border-top: 1px solid ${hexToRgba(primary, 0.18)}; border-bottom: 1px solid ${hexToRgba(primary, 0.18)}; }
     .meta-item { display: flex; align-items: center; gap: 10px; }
-    .meta-icon { width: 36px; height: 36px; border-radius: 50%; background: ${primary}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
     .meta-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: ${accent}; }
     .meta-value { font-size: 18px; font-weight: 700; color: ${primary}; }
     .meta-divider { width: 1px; height: 30px; background: ${hexToRgba(primary, 0.2)}; }

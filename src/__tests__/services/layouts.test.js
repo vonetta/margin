@@ -251,8 +251,29 @@ describe("suggestLayout", () => {
     expect(html).toContain("grid-template-columns: repeat(2, 1fr)");
   });
 
-  it("lists all four layouts", () => {
+  it("lists all five layouts", () => {
     const layouts = listLayouts();
-    expect(layouts.length).toBe(4);
+    expect(layouts.length).toBe(5);
+  });
+
+  it("renders collage with scattered photo cards for people with photos", () => {
+    const html = renderLayout("collage", {
+      content: { title: "Fall Retreat", date: "October 10", location: "Camp Cedar" },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F" } },
+      speakers: [
+        { name: "A", headshot_url: "https://example.com/a.jpg" },
+        { name: "B", headshot_url: "https://example.com/b.jpg" },
+      ],
+    });
+    expect(html).toContain("photo-card");
+    expect((html.match(/photo-card/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("suggests collage for a warm/energetic tone with multiple people photos", () => {
+    const id = suggestLayout({
+      speakers: [{ headshot_url: "a.jpg" }, { headshot_url: "b.jpg" }],
+      tone: "warm",
+    });
+    expect(id).toBe("collage");
   });
 });

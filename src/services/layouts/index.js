@@ -2,12 +2,14 @@ const monument = require("./monument");
 const feature = require("./feature");
 const canvas = require("./canvas");
 const showcase = require("./showcase");
+const collage = require("./collage");
 
 const LAYOUTS = {
   monument,
   feature,
   canvas,
   showcase,
+  collage,
 };
 
 // Return metadata for all layouts (for the UI gallery + engine suggestion)
@@ -35,6 +37,10 @@ const suggestLayout = ({ host, speakers = [], venueImage, tone } = {}) => {
 
   // No people but a venue image → Canvas (save-the-date style)
   if (!hasHost && speakerCount === 0 && venueImage) return "canvas";
+  // Warm/energetic tone with a handful of real photos reads better as a
+  // scattered photo-collage than a formal speaker grid.
+  const totalPhotoPeople = speakerCount + (hasHost ? 1 : 0);
+  if (["warm", "energetic"].includes(tone) && totalPhotoPeople >= 2) return "collage";
   // Many speakers, no single dominant host → Showcase
   if (speakerCount >= 3 && !hasHost) return "showcase";
   // A host with guest speakers → Monument

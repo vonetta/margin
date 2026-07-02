@@ -194,6 +194,61 @@ const abstractLinesOverlay = (color = "#ffffff", opacity = 0.14) => {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };
 
+// Inline stroke-based icons (not emoji). Headless Chromium in the
+// Puppeteer render environment has no color-emoji font installed, so 📅/📍/
+// 💰/👥 all fall back to the same generic "tofu" glyph — every info row
+// ends up showing one indistinguishable icon instead of a distinct one per
+// type. SVG paths render identically everywhere, no font dependency.
+const ICON_PATHS = {
+  calendar: `<path d="M7 2.5v3M17 2.5v3M4 8h16M5.5 4.5h13A1.5 1.5 0 0 1 20 6v13.5A1.5 1.5 0 0 1 18.5 21h-13A1.5 1.5 0 0 1 4 19.5V6a1.5 1.5 0 0 1 1.5-1.5Z"/>`,
+  pin: `<path d="M12 21s7-7.4 7-12.4a7 7 0 1 0-14 0C5 13.6 12 21 12 21Z"/><circle cx="12" cy="8.6" r="2.6"/>`,
+  dollar: `<path d="M12 2.5v19M17 6.8c0-2.1-2.2-3.6-5-3.6s-5 1.6-5 3.8c0 4.5 10 2.3 10 6.9 0 2.2-2.2 3.8-5 3.8s-5-1.5-5-3.8"/>`,
+  users: `<circle cx="8.8" cy="8" r="3.2"/><path d="M2.3 20.2c0-3.7 2.9-6.2 6.5-6.2s6.5 2.5 6.5 6.2"/><circle cx="17.2" cy="9" r="2.6"/><path d="M14.7 14.2c2.7.5 4.5 2.6 4.5 6"/>`,
+  clock: `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.3 2"/>`,
+  ticket: `<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h15A1.5 1.5 0 0 1 21 8.5v1.8a2 2 0 0 0 0 3.4v1.8A1.5 1.5 0 0 1 19.5 17h-15A1.5 1.5 0 0 1 3 15.5v-1.8a2 2 0 0 0 0-3.4V8.5Z"/><path d="M9.5 7v10" stroke-dasharray="2.2 2.2"/>`,
+};
+
+// Which icon a given info-row label should use, so layouts don't each hand-
+// pick an icon (and can't accidentally drift back to emoji).
+const ICON_FOR_LABEL = {
+  when: "calendar",
+  where: "pin",
+  cost: "dollar",
+  for: "users",
+};
+
+const iconForLabel = (label) => ICON_FOR_LABEL[String(label || "").toLowerCase()] || "calendar";
+
+const renderIconSvg = (name, { size = 18, color = "#fff", strokeWidth = 1.8 } = {}) => {
+  const paths = ICON_PATHS[name] || ICON_PATHS.calendar;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+};
+
+// A circular icon badge — the visual replacement for the old emoji-in-a-
+// circle meta-icon. Same footprint/markup shape as before so layouts can
+// drop it straight into an existing `.meta-icon`-style container.
+const renderIconBadge = (name, { size = 36, bg = "#1a1a2e", color = "#fff", iconSize } = {}) => {
+  return `<span class="icon-badge" style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">${renderIconSvg(name, { size: iconSize || Math.round(size * 0.5), color })}</span>`;
+};
+
+// CSS for gradient/foil script text — a solid brand-gradient fill clipped to
+// the text shape, used for cursive accent lines (the "handwritten gold
+// foil" look in reference flyers) instead of a single flat color.
+const gradientTextStyle = (colors, angle = 100) => {
+  const stops = [colors.gold, colors.accent || colors.gold, colors.gold].filter(Boolean);
+  return `background: linear-gradient(${angle}deg, ${stops.join(", ")}); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;`;
+};
+
+// A circular badge/seal with ring border and centered text — the "Special
+// Celebration" ribbon-seal look, distinct from renderRibbon's flat banner
+// tag (which is for short single-line role labels like HOST).
+const renderSeal = (text, { bg, color = "#fff", size = 120, ring } = {}) => {
+  if (!text) return "";
+  return `<div class="seal" style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;text-align:center;padding:${Math.round(size * 0.12)}px;border:3px solid ${ring || hexToRgba(color, 0.55)};box-shadow:0 8px 22px rgba(0,0,0,0.3);flex-shrink:0;">
+    <span style="font-size:${Math.round(size * 0.105)}px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;line-height:1.2;color:${color};">${escapeHtml(text)}</span>
+  </div>`;
+};
+
 // eslint-disable-next-line global-require
 const { validateStyle } = require("./styleSchema");
 
@@ -248,4 +303,9 @@ module.exports = {
   deriveColorVariants,
   resolveStyledTheme,
   resolveLogo,
+  iconForLabel,
+  renderIconSvg,
+  renderIconBadge,
+  gradientTextStyle,
+  renderSeal,
 };
