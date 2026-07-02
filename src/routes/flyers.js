@@ -15,6 +15,8 @@ const {
 } = require("../services/backgroundSelector");
 const { generateBackground } = require("../services/imageService");
 const { generateAiFlyer } = require("../services/aiFlyerService");
+const { generateContent } = require("../services/generationService");
+const ContentDraft = require("../models/ContentDraft");
 const Background = require("../models/Background");
 const Event = require("../models/Event");
 const { parseFlyerDate } = require("../services/calendarService");
@@ -309,6 +311,64 @@ router.post(
     } catch (error) {
       console.error("Flyer generation error:", error);
       res.status(500).json({ error: "Failed to generate flyer" });
+    }
+  },
+);
+
+// POST /api/flyers/:id/generate-caption — write an on-brand social caption
+// for an already-generated flyer, using the same AI voice engine as
+// Content Studio. Uses the flyer's own stored content fields (title/date/
+// location/etc, already known exactly) rather than re-reading them off the
+// image, so it's the direct in-app counterpart to Content Studio's
+// upload-a-flyer-image bridge (POST /api/content/extract-flyer).
+router.post(
+  "/:id/generate-caption",
+  requireRole("admin", "leader"),
+  [body("platform").optional().trim().isIn(["Instagram", "Facebook", "Email", "Quote card"])],
+  validate,
+  async (req, res) => {
+    try {
+      const flyer = await Flyer.findOne({
+        _id: req.params.id,
+        ministry_id: req.ministryId,
+      });
+      if (!flyer) return res.status(404).json({ error: "Flyer not found" });
+
+      const profile = await AiProfile.findOne({ ministry_id: req.ministryId });
+      if (!profile) {
+        return res.status(404).json({ error: "AI profile not found for this ministry" });
+      }
+
+      const platform = req.body.platform || "Instagram";
+      const c = flyer.content || {};
+      const promptLines = [
+        `Write a social caption for this event flyer, titled "${flyer.title}".`,
+        c.subtitle && `Subtitle: ${c.subtitle}`,
+        c.date && `Date: ${c.date}`,
+        c.location && `Location: ${c.location}`,
+        c.cost && `Cost: ${c.cost}`,
+        c.audience && `Audience: ${c.audience}`,
+        c.cta && `Call to action: ${c.cta}`,
+        c.description && `Description: ${c.description}`,
+      ].filter(Boolean);
+      const prompt = promptLines.join("\n");
+
+      const caption = await generateContent(prompt, profile, req.ministry, platform);
+
+      const draft = await ContentDraft.create({
+        ministry_id: req.ministryId,
+        prompt,
+        platform,
+        caption,
+        image_url: flyer.social_url || undefined,
+        generated_by: req.userId,
+        status: "pending",
+      });
+
+      res.status(201).json(draft);
+    } catch (error) {
+      console.error("Flyer caption generation error:", error);
+      res.status(500).json({ error: "Failed to generate a caption for this flyer" });
     }
   },
 );
