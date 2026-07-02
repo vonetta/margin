@@ -7,6 +7,7 @@ const SopDraft = require("../models/SopDraft");
 const { requireRole } = require("../middleware/auth");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { draftSopFromImages } = require("../services/imageService");
+const { exportSopAsPdf } = require("../services/sopExportService");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -358,8 +359,11 @@ router.post(
   },
 );
 
-// GET /api/profile/sops/drafts — list, optionally filtered by status
-router.get("/sops/drafts", async (req, res) => {
+// GET /api/profile/sops/drafts — list, optionally filtered by status.
+// SOPs can carry payment/vendor detail, so this needs the same admin/leader
+// bar as every other SOP route rather than being readable by any
+// authenticated ministry member.
+router.get("/sops/drafts", requireRole("admin", "leader"), async (req, res) => {
   try {
     const filter = { ministry_id: req.ministryId };
     if (req.query.status) filter.status = req.query.status;
@@ -435,6 +439,40 @@ router.put(
       res.json(draft);
     } catch (error) {
       res.status(500).json({ error: "Failed to reject SOP draft" });
+    }
+  },
+);
+
+// GET /api/profile/sops/drafts/:id/export — a downloadable PDF, streamed
+// directly through this authenticated route rather than stored on R2.
+// R2 URLs in this app are unsigned and permanently public with only 32 bits
+// of random-suffix entropy on the key — fine for a public flyer image, not
+// appropriate for a document that can carry payment methods and vendor
+// relationships.
+router.get(
+  "/sops/drafts/:id/export",
+  requireRole("admin", "leader"),
+  async (req, res) => {
+    try {
+      const mode = req.query.mode === "clean" ? "clean" : "internal";
+      const draft = await SopDraft.findOne({
+        _id: req.params.id,
+        ministry_id: req.ministryId,
+      });
+      if (!draft) return res.status(404).json({ error: "SOP draft not found" });
+
+      const pdf = await exportSopAsPdf({ draft, ministry: req.ministry, mode });
+
+      draft.exports.push({ by: req.userId, mode, at: new Date() });
+      await draft.save();
+
+      const filename = `${draft.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(pdf);
+    } catch (error) {
+      console.error("SOP export error:", error);
+      res.status(500).json({ error: "Failed to export this SOP" });
     }
   },
 );

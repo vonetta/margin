@@ -304,3 +304,123 @@ describe("Role enforcement on profile edits", () => {
     await User.deleteMany({ email: "team-test@ktm.com" });
   });
 });
+
+describe("GET /api/profile/sops/drafts", () => {
+  it("rejects a team-role user — SOPs can carry payment/vendor detail, same bar as the mutating routes", async () => {
+    await User.deleteMany({ email: "team-test@ktm.com" });
+    const teamRes = await request(app).post("/api/auth/register").send({
+      email: "team-test@ktm.com",
+      password: "Password123",
+      name: "Team Member",
+      ministry_id: "ktm-test",
+      role: "team",
+    });
+
+    const res = await request(app)
+      .get("/api/profile/sops/drafts")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamRes.body.token}`);
+
+    expect(res.status).toBe(403);
+    await User.deleteMany({ email: "team-test@ktm.com" });
+  });
+
+  it("lists SOP drafts for an admin", async () => {
+    await request(app)
+      .post("/api/profile/sops")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ title: "Sunday Setup", content: "1. Arrange chairs." });
+
+    const res = await request(app)
+      .get("/api/profile/sops/drafts")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBe(1);
+    expect(res.body[0].status).toBe("pending_review");
+  });
+});
+
+describe("GET /api/profile/sops/drafts/:id/export", () => {
+  const createDraft = async (overrides = {}) => {
+    const res = await request(app)
+      .post("/api/profile/sops")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ title: "Sunday Setup", content: "1. Arrange chairs.", ...overrides });
+    return res.body._id;
+  };
+
+  it("streams a PDF for an admin", async () => {
+    const id = await createDraft();
+
+    const res = await request(app)
+      .get(`/api/profile/sops/drafts/${id}/export`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("application/pdf");
+    expect(res.headers["content-disposition"]).toContain("attachment");
+  }, 20000);
+
+  it("rejects a team-role user", async () => {
+    const id = await createDraft();
+
+    await User.deleteMany({ email: "team-test@ktm.com" });
+    const teamRes = await request(app).post("/api/auth/register").send({
+      email: "team-test@ktm.com",
+      password: "Password123",
+      name: "Team Member",
+      ministry_id: "ktm-test",
+      role: "team",
+    });
+
+    const res = await request(app)
+      .get(`/api/profile/sops/drafts/${id}/export`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamRes.body.token}`);
+
+    expect(res.status).toBe(403);
+    await User.deleteMany({ email: "team-test@ktm.com" });
+  });
+
+  it("404s for a draft that doesn't belong to the requesting ministry", async () => {
+    await Ministry.deleteMany({ ministry_id: "ktm-other-test" });
+    await Ministry.create({ ministry_id: "ktm-other-test", name: "Other", plan: "enterprise" });
+    const otherRes = await request(app).post("/api/auth/register").send({
+      email: "other-admin@ktm.com",
+      password: "Password123",
+      name: "Other Admin",
+      ministry_id: "ktm-other-test",
+    });
+
+    const id = await createDraft();
+
+    const res = await request(app)
+      .get(`/api/profile/sops/drafts/${id}/export`)
+      .set("x-ministry-id", "ktm-other-test")
+      .set("Authorization", `Bearer ${otherRes.body.token}`);
+
+    expect(res.status).toBe(404);
+
+    await Ministry.deleteMany({ ministry_id: "ktm-other-test" });
+    await User.deleteMany({ email: "other-admin@ktm.com" });
+  });
+
+  it("appends an audit entry (by, mode, at) to the draft's exports array", async () => {
+    const id = await createDraft();
+
+    await request(app)
+      .get(`/api/profile/sops/drafts/${id}/export?mode=clean`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    const SopDraft = require("../../models/SopDraft");
+    const draft = await SopDraft.findById(id);
+    expect(draft.exports.length).toBe(1);
+    expect(draft.exports[0].mode).toBe("clean");
+  }, 20000);
+});

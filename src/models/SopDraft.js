@@ -21,6 +21,17 @@ const sopDraftSchema = new mongoose.Schema({
   approved_by: { type: String },
   approved_at: { type: Date },
   created_at: { type: Date, default: Date.now },
+  // Minimal audit trail for exports — this content can include payment
+  // methods and vendor relationships, and there's no other logging
+  // convention in this codebase to hook into yet.
+  exports: [
+    {
+      by: { type: String },
+      at: { type: Date, default: Date.now },
+      mode: { type: String },
+      _id: false,
+    },
+  ],
 });
 
 sopDraftSchema.index({ ministry_id: 1, status: 1 });

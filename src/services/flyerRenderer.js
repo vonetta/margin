@@ -37,6 +37,25 @@ const renderHtmlToPng = async (html, width, height) => {
   }
 };
 
+// A real multi-page document (unlike a flyer's fixed single canvas) — no
+// fixed viewport, page size/margins come from Puppeteer's own PDF options
+// instead.
+const renderHtmlToPdf = async (html, { format = "Letter", margin } = {}) => {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const buffer = await page.pdf({
+      format,
+      printBackground: true,
+      margin: margin || { top: "0.75in", bottom: "0.75in", left: "0.75in", right: "0.75in" },
+    });
+    return buffer;
+  } finally {
+    await page.close();
+  }
+};
+
 const closeBrowser = async () => {
   if (browserPromise) {
     const browser = await browserPromise;
@@ -45,4 +64,4 @@ const closeBrowser = async () => {
   }
 };
 
-module.exports = { renderHtmlToPng, closeBrowser };
+module.exports = { renderHtmlToPng, renderHtmlToPdf, closeBrowser };
