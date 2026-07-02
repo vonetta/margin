@@ -7,13 +7,6 @@ const ASPECT_RATIO_BY_SIZE = {
   print: "3:4",
 };
 
-// Matches the pixel dimensions the rest of the app assumes for each size,
-// so the QR overlay is positioned/sized consistently regardless of engine.
-const DIMENSIONS_BY_SIZE = {
-  social: { width: 1080, height: 1350 },
-  print: { width: 1275, height: 1650 },
-};
-
 // Download a remote image (a person's headshot, a ministry logo) into a
 // buffer the model can take as a grounding reference. Best-effort — a
 // failed fetch just means that one reference is skipped, not that the
@@ -117,9 +110,15 @@ Design direction: sophisticated, editorial event-flyer design — think a well-d
 // Composites a real, guaranteed-scannable QR code onto the generated image
 // — the model is never trusted to draw a working QR code itself, since
 // there's no way to verify a model-drawn one actually scans.
-const overlayQr = async (pngBuffer, qrUrl, { size, darkColor } = {}) => {
-  const dims = DIMENSIONS_BY_SIZE[size] || DIMENSIONS_BY_SIZE.social;
-  const qrSize = Math.round(dims.width * 0.14);
+//
+// The image model doesn't reliably return the exact pixel size implied by
+// the requested aspect ratio (asking for "4:5" has come back as 896x1152,
+// not the assumed 1080x1350) — positioning the QR against an assumed
+// canvas size pushed it partly off the actual image. Always read the real
+// dimensions off the generated buffer instead of assuming one.
+const overlayQr = async (pngBuffer, qrUrl, { darkColor } = {}) => {
+  const { width, height } = await sharp(pngBuffer).metadata();
+  const qrSize = Math.round(width * 0.14);
   const pad = Math.round(qrSize * 0.12);
   const boxSize = qrSize + pad * 2;
 
@@ -140,13 +139,13 @@ const overlayQr = async (pngBuffer, qrUrl, { size, darkColor } = {}) => {
     .png()
     .toBuffer();
 
-  const margin = Math.round(dims.width * 0.05);
+  const margin = Math.round(width * 0.05);
   return sharp(pngBuffer)
     .composite([
       {
         input: backing,
-        top: dims.height - boxSize - margin,
-        left: dims.width - boxSize - margin,
+        top: Math.max(0, height - boxSize - margin),
+        left: Math.max(0, width - boxSize - margin),
       },
     ])
     .png()
@@ -172,7 +171,7 @@ const generateAiFlyer = async ({
   let png = await generateFullFlyer(prompt, referenceImages, { aspectRatio });
 
   if (qrUrl) {
-    png = await overlayQr(png, qrUrl, { size, darkColor: branding.colors?.primary });
+    png = await overlayQr(png, qrUrl, { darkColor: branding.colors?.primary });
   }
 
   return {

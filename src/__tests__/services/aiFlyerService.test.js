@@ -101,6 +101,27 @@ describe("generateAiFlyer", () => {
     expect(result.png.equals(basePng)).toBe(false);
   });
 
+  it("positions the QR against the image's actual dimensions, not an assumed canvas size", async () => {
+    // The model doesn't reliably return the exact pixel size implied by
+    // the requested aspect ratio — this is smaller than the assumed
+    // 1080x1350 "social" canvas, reproducing the real bug where the QR
+    // landed partly outside the actual image.
+    const basePng = await fakePng(896, 1152);
+    mockGenerateFullFlyer.mockResolvedValue(basePng);
+
+    const result = await generateAiFlyer({
+      branding: { colors: { primary: "#03293F" } },
+      content: { title: "Worship Intensive" },
+      qrUrl: "https://example.com/rsvp",
+      size: "social",
+    });
+
+    const meta = await sharp(result.png).metadata();
+    // Compositing must not resize the canvas to the assumed size.
+    expect(meta.width).toBe(896);
+    expect(meta.height).toBe(1152);
+  });
+
   it("propagates a failure from the image model instead of silently returning a blank flyer", async () => {
     mockGenerateFullFlyer.mockRejectedValue(new Error("No image returned from Gemini"));
 
