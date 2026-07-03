@@ -1,4 +1,26 @@
 const Anthropic = require("@anthropic-ai/sdk");
+const { PDFParse } = require("pdf-parse");
+
+// Meeting summaries sometimes come as a PDF rather than Zoom's .vtt export
+// or plain text — extract the raw text before it ever reaches
+// parseTranscriptText. Strips the "-- N of M --" page-footer artifact
+// page-rendering tools (including the one used to generate this feature's
+// own test fixture) commonly add, since that's page furniture, not
+// meeting content.
+const extractPdfText = async (buffer) => {
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return result.text
+      .split("\n")
+      .filter((line) => !/^--\s*\d+\s*of\s*\d+\s*--$/.test(line.trim()))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  } finally {
+    await parser.destroy();
+  }
+};
 
 // Zoom's cloud-recording transcript export is WebVTT: a "WEBVTT" header,
 // then repeating blocks of a cue index, a timestamp line, and the spoken
@@ -110,4 +132,9 @@ const matchAssignee = (assigneeName, teamRoster = []) => {
   return partial || null;
 };
 
-module.exports = { parseTranscriptText, extractTasksFromTranscript, matchAssignee };
+module.exports = {
+  parseTranscriptText,
+  extractTasksFromTranscript,
+  matchAssignee,
+  extractPdfText,
+};

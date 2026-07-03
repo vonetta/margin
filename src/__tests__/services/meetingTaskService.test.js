@@ -1,4 +1,6 @@
 const mockCreate = jest.fn();
+const mockGetText = jest.fn();
+const mockDestroy = jest.fn().mockResolvedValue();
 
 jest.mock("@anthropic-ai/sdk", () => {
   return jest.fn().mockImplementation(() => ({
@@ -6,12 +8,20 @@ jest.mock("@anthropic-ai/sdk", () => {
   }));
 });
 
+jest.mock("pdf-parse", () => ({
+  PDFParse: jest.fn().mockImplementation(() => ({
+    getText: mockGetText,
+    destroy: mockDestroy,
+  })),
+}));
+
 process.env.ANTHROPIC_API_KEY = "test-key";
 
 const {
   parseTranscriptText,
   extractTasksFromTranscript,
   matchAssignee,
+  extractPdfText,
 } = require("../../services/meetingTaskService");
 
 describe("parseTranscriptText", () => {
@@ -116,5 +126,37 @@ describe("extractTasksFromTranscript", () => {
     await expect(extractTasksFromTranscript("", [])).rejects.toThrow(
       "A transcript is required",
     );
+  });
+});
+
+describe("extractPdfText", () => {
+  beforeEach(() => {
+    mockGetText.mockReset();
+    mockDestroy.mockClear();
+  });
+
+  it("extracts plain text from a PDF buffer", async () => {
+    mockGetText.mockResolvedValue({
+      text: "Apostle Khy: Let's plan the conference. Mesha, can you handle the flyer?",
+    });
+
+    const result = await extractPdfText(Buffer.from("fake-pdf-bytes"));
+    expect(result).toBe("Apostle Khy: Let's plan the conference. Mesha, can you handle the flyer?");
+  });
+
+  it("strips page-footer artifacts like '-- 1 of 1 --'", async () => {
+    mockGetText.mockResolvedValue({
+      text: "Some meeting content.\n\n-- 1 of 1 --\n\n",
+    });
+
+    const result = await extractPdfText(Buffer.from("fake-pdf-bytes"));
+    expect(result).not.toContain("-- 1 of 1 --");
+    expect(result).toBe("Some meeting content.");
+  });
+
+  it("always destroys the parser, even on failure", async () => {
+    mockGetText.mockRejectedValue(new Error("corrupt PDF"));
+    await expect(extractPdfText(Buffer.from("bad"))).rejects.toThrow("corrupt PDF");
+    expect(mockDestroy).toHaveBeenCalled();
   });
 });

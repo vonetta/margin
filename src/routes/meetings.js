@@ -11,11 +11,12 @@ const {
   parseTranscriptText,
   extractTasksFromTranscript,
   matchAssignee,
+  extractPdfText,
 } = require("../services/meetingTaskService");
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB — a transcript is text, not media
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB — PDFs run larger than plain-text/.vtt
 });
 
 const validate = (req, res, next) => {
@@ -34,10 +35,10 @@ const fetchTeamRoster = async (ministryId) => {
   return users.map((u) => ({ _id: u._id.toString(), name: u.name }));
 };
 
-// POST /api/meetings/transcript — upload a .vtt/.txt file or paste text,
-// AI extracts action items and matches them against the real team roster.
-// Nothing here creates a real Task yet — every extracted item lands as
-// pending_review.
+// POST /api/meetings/transcript — upload a .vtt/.txt/.pdf file or paste
+// text, AI extracts action items and matches them against the real team
+// roster. Nothing here creates a real Task yet — every extracted item
+// lands as pending_review.
 router.post(
   "/transcript",
   requireRole("admin", "leader"),
@@ -50,7 +51,15 @@ router.post(
   validate,
   async (req, res) => {
     try {
-      const rawText = req.file ? req.file.buffer.toString("utf8") : req.body.text;
+      let rawText;
+      if (req.file?.mimetype === "application/pdf") {
+        rawText = await extractPdfText(req.file.buffer);
+      } else if (req.file) {
+        rawText = req.file.buffer.toString("utf8");
+      } else {
+        rawText = req.body.text;
+      }
+
       if (!rawText || !rawText.trim()) {
         return res.status(400).json({ error: "A transcript file or pasted text is required" });
       }
