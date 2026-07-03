@@ -54,6 +54,32 @@ router.get(
   },
 );
 
+// GET /api/tasks/team-overview — every open task in this ministry grouped
+// by assignee. Unlike GET /, which only ever shows the caller's own tasks
+// (assigned to them or assigned by them), this is the "see where everyone
+// stands" view, so it's admin/leader gated the way Events' pending-approval
+// list already is.
+router.get("/team-overview", requireRole("admin", "leader"), async (req, res) => {
+  try {
+    const tasks = await Task.find({ ministry_id: req.ministryId, status: "open" }).sort({
+      due_date: 1,
+    });
+    const userIds = [...new Set(tasks.map((t) => t.assigned_to))];
+    const users = await User.find({ _id: { $in: userIds } }).select("name");
+    const nameById = Object.fromEntries(users.map((u) => [u._id.toString(), u.name]));
+
+    const grouped = {};
+    for (const task of tasks) {
+      const name = nameById[task.assigned_to] || "Unknown";
+      if (!grouped[name]) grouped[name] = [];
+      grouped[name].push(task);
+    }
+    res.json(grouped);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch team overview" });
+  }
+});
+
 // POST /api/tasks
 router.post(
   "/",

@@ -1,0 +1,120 @@
+const mockCreate = jest.fn();
+
+jest.mock("@anthropic-ai/sdk", () => {
+  return jest.fn().mockImplementation(() => ({
+    messages: { create: mockCreate },
+  }));
+});
+
+process.env.ANTHROPIC_API_KEY = "test-key";
+
+const {
+  parseTranscriptText,
+  extractTasksFromTranscript,
+  matchAssignee,
+} = require("../../services/meetingTaskService");
+
+describe("parseTranscriptText", () => {
+  it("strips WEBVTT headers, cue indices, and timestamp lines", () => {
+    const vtt = `WEBVTT
+
+1
+00:00:00.000 --> 00:00:05.000
+Apostle Khy: Let's start with the conference planning.
+
+2
+00:00:05.000 --> 00:00:10.000
+Mesha: I can take the flyer design.`;
+
+    const result = parseTranscriptText(vtt);
+    expect(result).not.toContain("WEBVTT");
+    expect(result).not.toContain("-->");
+    expect(result).not.toMatch(/^\d+$/m);
+    expect(result).toContain("Apostle Khy: Let's start with the conference planning.");
+    expect(result).toContain("Mesha: I can take the flyer design.");
+  });
+
+  it("passes through plain (non-VTT) text unchanged", () => {
+    const plain = "Apostle Khy: Let's start.\nMesha: Sounds good.";
+    expect(parseTranscriptText(plain)).toBe(plain);
+  });
+
+  it("handles empty/nullish input", () => {
+    expect(parseTranscriptText("")).toBe("");
+    expect(parseTranscriptText(null)).toBe("");
+  });
+});
+
+describe("matchAssignee", () => {
+  const roster = [
+    { _id: "u1", name: "Prophetess Mesha" },
+    { _id: "u2", name: "Conita Reed" },
+  ];
+
+  it("matches an exact name", () => {
+    expect(matchAssignee("Conita Reed", roster)).toEqual(roster[1]);
+  });
+
+  it("matches a partial name either direction", () => {
+    expect(matchAssignee("Mesha", roster)).toEqual(roster[0]);
+  });
+
+  it("returns null rather than guessing when nothing matches", () => {
+    expect(matchAssignee("Someone Else", roster)).toBeNull();
+  });
+
+  it("returns null for an empty/missing name", () => {
+    expect(matchAssignee("", roster)).toBeNull();
+    expect(matchAssignee(undefined, roster)).toBeNull();
+  });
+});
+
+describe("extractTasksFromTranscript", () => {
+  beforeEach(() => mockCreate.mockReset());
+
+  const toolResponse = (tasks) => ({
+    content: [{ type: "tool_use", name: "extract_tasks", input: { tasks } }],
+  });
+
+  it("returns the tasks extracted via tool use", async () => {
+    mockCreate.mockResolvedValue(
+      toolResponse([
+        { description: "Design the conference flyer", assignee_name: "Prophetess Mesha" },
+        { description: "Confirm the venue" },
+      ]),
+    );
+
+    const tasks = await extractTasksFromTranscript("some transcript", [
+      { _id: "u1", name: "Prophetess Mesha" },
+    ]);
+
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0].assignee_name).toBe("Prophetess Mesha");
+    expect(tasks[1].assignee_name).toBeUndefined();
+  });
+
+  it("includes the team roster names in the system prompt", async () => {
+    mockCreate.mockResolvedValue(toolResponse([]));
+    await extractTasksFromTranscript("transcript", [
+      { _id: "u1", name: "Prophetess Mesha" },
+      { _id: "u2", name: "Conita Reed" },
+    ]);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    expect(callArgs.system).toContain("Prophetess Mesha");
+    expect(callArgs.system).toContain("Conita Reed");
+  });
+
+  it("throws if the model doesn't return a tool_use block", async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: "text", text: "I couldn't read this." }] });
+    await expect(extractTasksFromTranscript("transcript", [])).rejects.toThrow(
+      "No tasks could be extracted",
+    );
+  });
+
+  it("requires a non-empty transcript", async () => {
+    await expect(extractTasksFromTranscript("", [])).rejects.toThrow(
+      "A transcript is required",
+    );
+  });
+});
