@@ -9,6 +9,15 @@ const extractedTaskSchema = new mongoose.Schema({
   assignee_name_raw: { type: String }, // exactly what the AI read off the transcript
   matched_user_id: { type: String }, // resolved against the ministry's real team roster, if matched
   due_date: { type: Date },
+  // Which ministry this task actually belongs to — defaults to the
+  // draft's own ministry_id, but can differ when a shared meeting spans
+  // a parent/sub-ministry org family and the AI (or a human editing the
+  // draft) tags a task as belonging to a related ministry instead.
+  target_ministry_id: { type: String },
+  // True when the AI named a target_ministry_id but wasn't fully
+  // confident — lets the review UI flag only the uncertain guesses
+  // instead of demanding equal scrutiny on every task.
+  ministry_uncertain: { type: Boolean, default: false },
   status: {
     type: String,
     enum: ["pending_review", "approved", "rejected"],

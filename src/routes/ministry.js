@@ -13,6 +13,7 @@ const { requireRole } = require("../middleware/auth");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { expandEvents } = require("../services/calendarService");
 const { limitsFor, planLimitError, startOfMonth } = require("../services/planLimits");
+const { getOrgFamily } = require("../services/ministryService");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -215,19 +216,12 @@ router.get("/team", requireRole("admin", "leader"), async (req, res) => {
       is_active: true,
     }).select("name email ministries");
 
-    // "Linked ministries" means same org family — this ministry's parent
-    // (if it's a sub-ministry) plus every ministry under that same
-    // parent — not just this ministry's own children. Showing a member's
+    // "Linked ministries" means same org family — showing a member's
     // membership in some unrelated ministry elsewhere on the platform
     // would be a real tenant-isolation leak; the org family is the only
     // scope that's already meant to be visible together (it's exactly
     // what org-overview rolls up).
-    const currentMinistry = await Ministry.findOne({ ministry_id: req.ministryId });
-    const rootId = currentMinistry?.parent_ministry_id || req.ministryId;
-    const family = await Ministry.find(
-      { $or: [{ ministry_id: rootId }, { parent_ministry_id: rootId }] },
-      "ministry_id name",
-    );
+    const family = await getOrgFamily(req.ministryId);
     const familyNameById = Object.fromEntries(family.map((m) => [m.ministry_id, m.name]));
 
     const team = users.map((u) => ({
@@ -323,6 +317,20 @@ router.get(
     }
   },
 );
+
+// GET /api/ministry/family — this ministry plus its parent/siblings
+// (ministry_id + name only), for features that need to let an admin/
+// leader route something (e.g. a meeting-extracted task) to a related
+// ministry rather than just the one they're currently in. Same org-family
+// boundary as GET /team — visibility only, never access.
+router.get("/family", requireRole("admin", "leader"), async (req, res) => {
+  try {
+    const family = await getOrgFamily(req.ministryId);
+    res.json(family);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch ministry family" });
+  }
+});
 
 // GET /api/ministry/org-overview — aggregate counts per sub-ministry
 // (team size, pending approvals, open tasks, events in the next 30

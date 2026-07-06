@@ -44,6 +44,10 @@ const parseTranscriptText = (raw) => {
     .join("\n");
 };
 
+// ministry_name/ministry_uncertain are only meaningful (and only ever
+// requested of the model) when the ministry has an org family — a single
+// standalone ministry never needs this field, so the property is always
+// optional and simply omitted from every task in that case.
 const EXTRACT_TASKS_TOOL = {
   name: "extract_tasks",
   description:
@@ -70,6 +74,16 @@ const EXTRACT_TASKS_TOOL = {
               description:
                 "An ISO 8601 date (YYYY-MM-DD) only if a specific date or unambiguous timeframe was actually mentioned (e.g. 'by Friday' relative to the meeting date). Omit otherwise — never invent one.",
             },
+            ministry_name: {
+              type: "string",
+              description:
+                "Only when a list of related ministries is provided below: the exact name (from that list) of which ministry this task actually belongs to, based on what the transcript says (e.g. 'on the Salt and Light side'). Omit if the meeting's default/home ministry applies or it's genuinely unclear.",
+            },
+            ministry_uncertain: {
+              type: "boolean",
+              description:
+                "Set true only if you provided a ministry_name but you're not fully confident in it — flags it for extra human review. Omit or set false when confident.",
+            },
           },
           required: ["description"],
         },
@@ -83,7 +97,12 @@ const EXTRACT_TASKS_TOOL = {
 // invents one that wasn't actually discussed. Only text generation is
 // needed here (no images), unlike the SOP-from-images path, so this goes
 // through Claude rather than Gemini.
-const extractTasksFromTranscript = async (transcript, teamRoster = [], meetingDate = null) => {
+const extractTasksFromTranscript = async (
+  transcript,
+  teamRoster = [],
+  meetingDate = null,
+  familyMinistries = [],
+) => {
   if (!transcript || !transcript.trim()) {
     throw new Error("A transcript is required to extract tasks");
   }
@@ -91,13 +110,17 @@ const extractTasksFromTranscript = async (transcript, teamRoster = [], meetingDa
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const rosterNames = teamRoster.map((m) => m.name).join(", ") || "(no roster provided)";
   const dateContext = meetingDate ? `This meeting took place on ${meetingDate}.` : "";
+  const familyContext =
+    familyMinistries.length > 1
+      ? `\n\nThis meeting may cover more than one related ministry: ${familyMinistries.map((m) => m.name).join(", ")}. For each task, if the transcript makes clear which of these ministries it actually belongs to (not necessarily the one hosting this meeting), set ministry_name to that ministry's exact name from this list.`
+      : "";
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
     system: `You read meeting transcripts for a ministry leadership team and extract concrete action items — real things someone was asked to do, discussed as a next step, or committed to. Only extract action items that were actually discussed; do not invent tasks or pad the list to seem thorough. ${dateContext}
 
-The team roster for this ministry is: ${rosterNames}. When the transcript identifies who something was assigned to, use their exact name as written in this roster (not however they were referred to in casual speech) so it can be matched automatically. If no specific person was named for an item, omit assignee_name entirely rather than guessing.`,
+The team roster for this ministry is: ${rosterNames}. When the transcript identifies who something was assigned to, use their exact name as written in this roster (not however they were referred to in casual speech) so it can be matched automatically. If no specific person was named for an item, omit assignee_name entirely rather than guessing.${familyContext}`,
     tools: [EXTRACT_TASKS_TOOL],
     tool_choice: { type: "tool", name: "extract_tasks" },
     messages: [{ role: "user", content: transcript }],

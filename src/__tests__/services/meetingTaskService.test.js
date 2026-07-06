@@ -127,6 +127,43 @@ describe("extractTasksFromTranscript", () => {
       "A transcript is required",
     );
   });
+
+  it("does not mention related ministries in the prompt when there's no org family", async () => {
+    mockCreate.mockResolvedValue(toolResponse([]));
+    await extractTasksFromTranscript("transcript", [], null, [{ ministry_id: "ktm", name: "KTM" }]);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    expect(callArgs.system).not.toContain("related ministry");
+    expect(callArgs.tools[0].input_schema.properties.tasks.items.properties.ministry_name).toBeDefined();
+  });
+
+  it("tells the model about every related ministry when an org family is passed", async () => {
+    mockCreate.mockResolvedValue(toolResponse([]));
+    await extractTasksFromTranscript("transcript", [], null, [
+      { ministry_id: "ktm", name: "KTM" },
+      { ministry_id: "salt-light", name: "Salt & Light" },
+    ]);
+
+    const callArgs = mockCreate.mock.calls[0][0];
+    expect(callArgs.system).toContain("KTM");
+    expect(callArgs.system).toContain("Salt & Light");
+  });
+
+  it("returns ministry_name and ministry_uncertain when the model provides them", async () => {
+    mockCreate.mockResolvedValue(
+      toolResponse([
+        { description: "Rent the van", ministry_name: "Salt & Light", ministry_uncertain: true },
+      ]),
+    );
+
+    const tasks = await extractTasksFromTranscript("transcript", [], null, [
+      { ministry_id: "ktm", name: "KTM" },
+      { ministry_id: "salt-light", name: "Salt & Light" },
+    ]);
+
+    expect(tasks[0].ministry_name).toBe("Salt & Light");
+    expect(tasks[0].ministry_uncertain).toBe(true);
+  });
 });
 
 describe("extractPdfText", () => {
