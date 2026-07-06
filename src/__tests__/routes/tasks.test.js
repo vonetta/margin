@@ -236,8 +236,9 @@ describe("GET /api/tasks/team-overview", () => {
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body["Team A"]).toHaveLength(1);
-    expect(res.body["Team A"][0].title).toBe("Open for Team A");
+    expect(res.body[teamAId].name).toBe("Team A");
+    expect(res.body[teamAId].tasks).toHaveLength(1);
+    expect(res.body[teamAId].tasks[0].title).toBe("Open for Team A");
   });
 
   it("returns only done tasks with status=done", async () => {
@@ -261,8 +262,8 @@ describe("GET /api/tasks/team-overview", () => {
       .set("x-ministry-id", "ktm-test")
       .set("Authorization", `Bearer ${adminToken}`);
 
-    expect(res.body["Team A"]).toHaveLength(1);
-    expect(res.body["Team A"][0].title).toBe("Done for Team A");
+    expect(res.body[teamAId].tasks).toHaveLength(1);
+    expect(res.body[teamAId].tasks[0].title).toBe("Done for Team A");
   });
 
   it("returns both open and done tasks with status=all", async () => {
@@ -286,7 +287,7 @@ describe("GET /api/tasks/team-overview", () => {
       .set("x-ministry-id", "ktm-test")
       .set("Authorization", `Bearer ${adminToken}`);
 
-    expect(res.body["Team A"]).toHaveLength(2);
+    expect(res.body[teamAId].tasks).toHaveLength(2);
   });
 
   it("is blocked for a plain team member", async () => {

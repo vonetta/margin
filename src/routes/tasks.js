@@ -60,6 +60,8 @@ router.get(
 // only ever shows the caller's own tasks (assigned to them or assigned by
 // them), this is the "see where everyone stands" view, so it's
 // admin/leader gated the way Events' pending-approval list already is.
+// Keyed by user id (not name) so a client can use the key directly as a
+// real assigned_to value — e.g. the Tasks board's drag-to-reassign.
 router.get(
   "/team-overview",
   requireRole("admin", "leader"),
@@ -78,9 +80,9 @@ router.get(
 
       const grouped = {};
       for (const task of tasks) {
-        const name = nameById[task.assigned_to] || "Unknown";
-        if (!grouped[name]) grouped[name] = [];
-        grouped[name].push(task);
+        const id = task.assigned_to;
+        if (!grouped[id]) grouped[id] = { name: nameById[id] || "Unknown", tasks: [] };
+        grouped[id].tasks.push(task);
       }
       res.json(grouped);
     } catch (error) {
