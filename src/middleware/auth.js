@@ -47,4 +47,16 @@ const requireRole = (...roles) => {
   };
 };
 
-module.exports = { authMiddleware, requireRole };
+// Backend counterpart to the frontend's ProtectedRoute requireOnboarding
+// gate — mirrors that same profile-dependent-surfaces boundary (Content
+// Studio, Flyers, Social Queue) so a direct API call can't bypass what
+// the UI enforces. Everything else (calendar, tasks, team, people) stays
+// reachable pre-onboarding on the backend too, matching the frontend.
+const requireOnboarding = (req, res, next) => {
+  if (!req.ministry.onboarding_complete) {
+    return res.status(403).json({ error: "Finish onboarding before using this feature" });
+  }
+  next();
+};
+
+module.exports = { authMiddleware, requireRole, requireOnboarding };

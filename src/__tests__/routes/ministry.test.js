@@ -320,6 +320,31 @@ describe("GET /api/ministry/team", () => {
       .set("Authorization", `Bearer ${teamToken}`);
     expect(res.status).toBe(403);
   });
+
+  it("lists a member's other memberships within the same org family (parent + siblings), not unrelated ministries", async () => {
+    // Creating the sub-ministry also adds the creating admin as a member
+    // of it — exactly the "same person on two linked ministries" case.
+    await request(app)
+      .post("/api/ministry/sub-ministries")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ ministry_id: "salt-light-test", name: "Salt & Light Test" });
+
+    const res = await request(app)
+      .get("/api/ministry/team")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    const admin = res.body.find((u) => u.email === "ministry-test@ktm.com");
+    expect(admin.other_ministries).toEqual([
+      { ministry_id: "salt-light-test", name: "Salt & Light Test", role: "admin" },
+    ]);
+
+    // A member with no other memberships gets an empty array, not undefined.
+    const teamMember = res.body.find((u) => u.email === "ministry-team-test@ktm.com");
+    expect(teamMember.other_ministries).toEqual([]);
+  });
 });
 
 describe("PUT /api/ministry/team/:userId", () => {

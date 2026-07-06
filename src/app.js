@@ -5,7 +5,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 const tenantMiddleware = require("./middleware/tenant");
-const { authMiddleware } = require("./middleware/auth");
+const { authMiddleware, requireOnboarding } = require("./middleware/auth");
 const authRoutes = require("./routes/auth");
 const ministryRoutes = require("./routes/ministry");
 const aiProfileRoutes = require("./routes/aiProfile");
@@ -106,11 +106,17 @@ app.use("/api/social/callback", publicSocialCallbackRoutes);
 app.use("/api", tenantMiddleware);
 app.use("/api", authMiddleware);
 
-app.use("/api/flyers", flyerRoutes);
+// Profile-dependent surfaces (need a real AI profile to produce anything
+// useful) — gated behind onboarding on the backend too, mirroring the
+// frontend's ProtectedRoute requireOnboarding boundary so a direct API
+// call can't bypass what the UI enforces.
+app.use("/api/flyers", requireOnboarding, flyerRoutes);
+app.use("/api/content", requireOnboarding, contentRoutes);
+app.use("/api/social-posts", requireOnboarding, socialPostRoutes);
+
 app.use("/api/backgrounds", backgroundRoutes);
 app.use("/api/ministry", ministryRoutes);
 app.use("/api/profile", aiProfileRoutes);
-app.use("/api/content", contentRoutes);
 app.use("/api/people", peopleRoutes);
 app.use("/api/communications", communicationsRoutes);
 app.use("/api/events", eventRoutes);
@@ -119,7 +125,6 @@ app.use("/api/meetings", meetingRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/invites", inviteRoutes);
 app.use("/api/social", socialAuthRoutes);
-app.use("/api/social-posts", socialPostRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });

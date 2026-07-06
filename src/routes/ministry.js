@@ -215,11 +215,33 @@ router.get("/team", requireRole("admin", "leader"), async (req, res) => {
       is_active: true,
     }).select("name email ministries");
 
+    // "Linked ministries" means same org family — this ministry's parent
+    // (if it's a sub-ministry) plus every ministry under that same
+    // parent — not just this ministry's own children. Showing a member's
+    // membership in some unrelated ministry elsewhere on the platform
+    // would be a real tenant-isolation leak; the org family is the only
+    // scope that's already meant to be visible together (it's exactly
+    // what org-overview rolls up).
+    const currentMinistry = await Ministry.findOne({ ministry_id: req.ministryId });
+    const rootId = currentMinistry?.parent_ministry_id || req.ministryId;
+    const family = await Ministry.find(
+      { $or: [{ ministry_id: rootId }, { parent_ministry_id: rootId }] },
+      "ministry_id name",
+    );
+    const familyNameById = Object.fromEntries(family.map((m) => [m.ministry_id, m.name]));
+
     const team = users.map((u) => ({
       _id: u._id,
       name: u.name,
       email: u.email,
       role: u.getMembership(req.ministryId)?.role,
+      other_ministries: u.ministries
+        .filter((m) => m.ministry_id !== req.ministryId && familyNameById[m.ministry_id])
+        .map((m) => ({
+          ministry_id: m.ministry_id,
+          name: familyNameById[m.ministry_id],
+          role: m.role,
+        })),
     }));
 
     res.json(team);

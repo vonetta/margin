@@ -133,6 +133,84 @@ describe("POST /api/auth/register", () => {
   });
 });
 
+describe("POST /api/auth/register-ministry", () => {
+  const newMinistryPayload = {
+    ministry_id: "brand-new-test",
+    ministry_name: "Brand New Test Ministry",
+    email: "founder@brandnew.com",
+    password: "Password123",
+    name: "Founding Admin",
+  };
+
+  afterEach(async () => {
+    await User.deleteMany({ email: "founder@brandnew.com" });
+    await Ministry.deleteMany({ ministry_id: "brand-new-test" });
+    const AiProfile = require("../../models/AiProfile");
+    await AiProfile.deleteMany({ ministry_id: "brand-new-test" });
+  });
+
+  it("creates a new ministry, an empty AI profile, and an admin user in one call", async () => {
+    const res = await request(app)
+      .post("/api/auth/register-ministry")
+      .send(newMinistryPayload);
+
+    expect(res.status).toBe(201);
+    expect(res.body.token).toBeDefined();
+    expect(res.body.user.ministries).toEqual([
+      { ministry_id: "brand-new-test", role: "admin" },
+    ]);
+
+    const ministry = await Ministry.findOne({ ministry_id: "brand-new-test" });
+    expect(ministry.name).toBe("Brand New Test Ministry");
+    expect(ministry.onboarding_complete).toBe(false);
+
+    const AiProfile = require("../../models/AiProfile");
+    const profile = await AiProfile.findOne({ ministry_id: "brand-new-test" });
+    expect(profile).not.toBeNull();
+  });
+
+  it("rejects a ministry_id that's already in use", async () => {
+    await request(app).post("/api/auth/register-ministry").send(newMinistryPayload);
+
+    const res = await request(app)
+      .post("/api/auth/register-ministry")
+      .send({ ...newMinistryPayload, email: "someone-else@brandnew.com" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Ministry ID already in use");
+
+    await User.deleteMany({ email: "someone-else@brandnew.com" });
+  });
+
+  it("rejects an invalid ministry_id slug", async () => {
+    const res = await request(app)
+      .post("/api/auth/register-ministry")
+      .send({ ...newMinistryPayload, ministry_id: "Not A Slug!" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors[0].msg).toBe(
+      "Ministry ID must be lowercase letters, numbers, and hyphens only",
+    );
+  });
+
+  it("lets an existing user found a second, separate ministry", async () => {
+    await request(app).post("/api/auth/register").send(testUser);
+
+    const res = await request(app).post("/api/auth/register-ministry").send({
+      ...newMinistryPayload,
+      email: testUser.email,
+      password: testUser.password,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.user.ministries).toHaveLength(2);
+    expect(res.body.user.ministries).toContainEqual({
+      ministry_id: "brand-new-test",
+      role: "admin",
+    });
+  });
+});
+
 describe("POST /api/auth/login", () => {
   beforeEach(async () => {
     await request(app).post("/api/auth/register").send(testUser);

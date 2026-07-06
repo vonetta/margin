@@ -25,6 +25,7 @@ const testMinistry = {
   ministry_id: "ktm-test",
   name: "Khy Traylor Global Ministries",
   plan: "enterprise",
+  onboarding_complete: true,
 };
 
 const testProfile = {

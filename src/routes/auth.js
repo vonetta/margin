@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const { body, validationResult } = require("express-validator");
 const User = require("../models/User");
 const Ministry = require("../models/Ministry");
+const AiProfile = require("../models/AiProfile");
 const Invite = require("../models/Invite");
 const { limitsFor, planLimitError } = require("../services/planLimits");
 
@@ -132,6 +133,98 @@ router.post(
     } catch (error) {
       console.error("Register error:", error);
       res.status(500).json({ error: "Registration failed" });
+    }
+  },
+);
+
+// POST /api/auth/register-ministry
+// Self-serve entry point for a brand-new ministry — unlike /register,
+// which requires an existing ministry_id, this creates the Ministry (and
+// its empty AiProfile shell, same as the sub-ministry creation path) and
+// its first admin in one call. That first admin is always "admin"; there
+// is no invite/role negotiation because nobody else is a member yet.
+// onboarding_complete stays false so the frontend can route them straight
+// into the onboarding flow.
+router.post(
+  "/register-ministry",
+  [
+    body("ministry_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Ministry ID is required")
+      .matches(/^[a-z0-9-]+$/)
+      .withMessage(
+        "Ministry ID must be lowercase letters, numbers, and hyphens only",
+      ),
+    body("ministry_name").trim().notEmpty().withMessage("Ministry name is required"),
+    body("email")
+      .isEmail()
+      .withMessage("Valid email is required")
+      .normalizeEmail(),
+    body("password")
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters"),
+    body("name").trim().notEmpty().withMessage("Name is required"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { ministry_id, ministry_name, email, password, name } = req.body;
+
+      const existingMinistry = await Ministry.findOne({ ministry_id });
+      if (existingMinistry) {
+        return res.status(400).json({ error: "Ministry ID already in use" });
+      }
+
+      let user = await User.findOne({ email });
+      if (user && user.getMembership(ministry_id)) {
+        return res.status(400).json({ error: "Already a member of this ministry" });
+      }
+
+      await Ministry.create({ ministry_id, name: ministry_name });
+
+      await AiProfile.create({
+        ministry_id,
+        voice_profile: {
+          persona_name: ministry_name,
+          sign_off: "",
+          tone_pillars: [],
+          sample_phrases: [],
+          avoid: [],
+        },
+        hashtags: { brand: [], content: [] },
+        sops: [],
+        templates: [],
+        recurring_content: [],
+      });
+
+      if (user) {
+        user.ministries.push({ ministry_id, role: "admin" });
+        await user.save();
+      } else {
+        const hashedPassword = await bcrypt.hash(password, 12);
+        user = await User.create({
+          email,
+          password: hashedPassword,
+          name,
+          ministries: [{ ministry_id, role: "admin" }],
+        });
+      }
+
+      const token = signToken(user._id);
+
+      res.status(201).json({
+        token,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          ministries: user.ministries,
+        },
+      });
+    } catch (error) {
+      console.error("Register ministry error:", error);
+      res.status(500).json({ error: "Ministry registration failed" });
     }
   },
 );

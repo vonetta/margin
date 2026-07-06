@@ -38,6 +38,7 @@ const testMinistry = {
   name: "KTM Test",
   plan: "enterprise",
   branding: { colors: { primary: "#03293F" } },
+  onboarding_complete: true,
 };
 
 let adminToken, teamToken;
@@ -98,7 +99,7 @@ describe("GET /api/flyers/layouts", () => {
       .set("x-ministry-id", "ktm-test")
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
-    expect(res.body.length).toBe(4);
+    expect(res.body.length).toBe(5);
     expect(res.body[0]).toHaveProperty("name");
   });
 });
@@ -267,7 +268,7 @@ describe("plan limits on POST /api/flyers/generate", () => {
   });
 
   it("blocks generating a 16th flyer in a month on the small plan (cap 15)", async () => {
-    await Ministry.create({ ministry_id: "flyer-cap-test", name: "Flyer Cap Test", plan: "small" });
+    await Ministry.create({ ministry_id: "flyer-cap-test", name: "Flyer Cap Test", plan: "small", onboarding_complete: true });
     const admin = await request(app).post("/api/auth/register").send({
       email: "flyer-cap-admin@ktm.com",
       password: "Password123",
@@ -296,7 +297,7 @@ describe("plan limits on POST /api/flyers/generate", () => {
   });
 
   it("does not count flyers created in a prior month toward the cap", async () => {
-    await Ministry.create({ ministry_id: "flyer-cap-test", name: "Flyer Cap Test", plan: "small" });
+    await Ministry.create({ ministry_id: "flyer-cap-test", name: "Flyer Cap Test", plan: "small", onboarding_complete: true });
     const admin = await request(app).post("/api/auth/register").send({
       email: "flyer-cap-admin@ktm.com",
       password: "Password123",
