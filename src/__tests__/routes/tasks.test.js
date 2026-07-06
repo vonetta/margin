@@ -213,6 +213,92 @@ describe("GET /api/tasks", () => {
   });
 });
 
+describe("GET /api/tasks/team-overview", () => {
+  it("groups open tasks by assignee for an admin, defaulting to status=open", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Open for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "open",
+    });
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Done for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "done",
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/team-overview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body["Team A"]).toHaveLength(1);
+    expect(res.body["Team A"][0].title).toBe("Open for Team A");
+  });
+
+  it("returns only done tasks with status=done", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Open for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "open",
+    });
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Done for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "done",
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/team-overview?status=done")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.body["Team A"]).toHaveLength(1);
+    expect(res.body["Team A"][0].title).toBe("Done for Team A");
+  });
+
+  it("returns both open and done tasks with status=all", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Open for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "open",
+    });
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Done for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "done",
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/team-overview?status=all")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.body["Team A"]).toHaveLength(2);
+  });
+
+  it("is blocked for a plain team member", async () => {
+    const res = await request(app)
+      .get("/api/tasks/team-overview")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`);
+
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("PUT /api/tasks/:id/complete and /reopen", () => {
   it("lets the assignee mark their own task complete", async () => {
     const task = await Task.create({
