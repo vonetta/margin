@@ -96,6 +96,45 @@ const rehueTo = (hex, targetHue) => {
   return hslToHex({ ...hsl, h: ((targetHue % 360) + 360) % 360 });
 };
 
+// WCAG relative luminance / contrast ratio — same math the a11y audits
+// use, applied at render time so brand-derived text colors can be
+// checked against the actual surface they'll sit on.
+const relativeLuminance = (hex) => {
+  const h = (hex || "#000000").replace("#", "");
+  const chan = (i) => {
+    const v = parseInt(h.substring(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4);
+};
+
+const contrastRatio = (hexA, hexB) => {
+  const [hi, lo] = [relativeLuminance(hexA), relativeLuminance(hexB)].sort((a, b) => b - a);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+// Nudge a color's lightness away from the background until it clears the
+// given contrast ratio — darker on a light background, lighter on a dark
+// one — keeping its hue/saturation so it still reads as the same brand
+// color, just deep (or pale) enough to actually be readable. A ministry
+// whose accent is salmon on a blush-pink page background (a real palette
+// in production) otherwise produces gradient text that's nearly
+// invisible.
+const ensureContrastOn = (hex, bg, minRatio = 3) => {
+  if (!hex || !bg || contrastRatio(hex, bg) >= minRatio) return hex;
+  const darkenNotLighten = relativeLuminance(bg) >= 0.5;
+  const hsl = hexToHsl(hex);
+  let { l } = hsl;
+  let candidate = hex;
+  for (let i = 0; i < 40; i++) {
+    l += darkenNotLighten ? -0.025 : 0.025;
+    if (l <= 0.02 || l >= 0.98) break;
+    candidate = hslToHex({ ...hsl, l });
+    if (contrastRatio(candidate, bg) >= minRatio) return candidate;
+  }
+  return candidate;
+};
+
 // Derive a handful of "on-brand but not identical" palette variants from a
 // ministry's actual brand colors, instead of opening color choice up to
 // anything — every variant is mathematically derived from the same source
@@ -233,9 +272,14 @@ const renderIconBadge = (name, { size = 36, bg = "#1a1a2e", color = "#fff", icon
 
 // CSS for gradient/foil script text — a solid brand-gradient fill clipped to
 // the text shape, used for cursive accent lines (the "handwritten gold
-// foil" look in reference flyers) instead of a single flat color.
+// foil" look in reference flyers) instead of a single flat color. When the
+// caller passes the surface color as colors.bg, every stop is contrast-
+// corrected against it (3:1 — the WCAG large-text floor; this style is
+// only used for large display lines) so the foil effect can never render
+// as tone-on-tone invisible text.
 const gradientTextStyle = (colors, angle = 100) => {
-  const stops = [colors.gold, colors.accent || colors.gold, colors.gold].filter(Boolean);
+  let stops = [colors.gold, colors.accent || colors.gold, colors.gold].filter(Boolean);
+  if (colors.bg) stops = stops.map((c) => ensureContrastOn(c, colors.bg, 3));
   return `background: linear-gradient(${angle}deg, ${stops.join(", ")}); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;`;
 };
 
@@ -313,4 +357,6 @@ module.exports = {
   renderIconBadge,
   gradientTextStyle,
   renderSeal,
+  contrastRatio,
+  ensureContrastOn,
 };

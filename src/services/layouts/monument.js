@@ -211,7 +211,7 @@ const render = ({
     .logo-backing-pill { background: #fff; border-radius: 999px; padding: 10px 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
     .photo-corner-logo { position: absolute; top: 20px; right: 20px; z-index: 3; }
     .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; text-shadow: 0 2px 14px ${hexToRgba(bg, 0.5)}; }
-    .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; line-height: 1; margin-top: 8px; ${gradientTextStyle({ primary, accent, gold })} filter: drop-shadow(0 2px 10px ${hexToRgba(bg, 0.55)}); }
+    .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; line-height: 1; margin-top: 8px; ${gradientTextStyle({ primary, accent, gold, bg })} filter: drop-shadow(0 2px 10px ${hexToRgba(bg, 0.55)}); }
     .desc { font-size: ${s.description_size}px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
     .tag-row { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
     .tag-pill { display: inline-block; padding: 7px 18px; border-radius: 20px; border: 1.5px solid ${hexToRgba(primary, 0.5)}; color: ${primary}; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }

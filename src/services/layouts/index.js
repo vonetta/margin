@@ -31,12 +31,19 @@ const renderLayout = (id, props) => {
 
 // Suggest the best layout for an event based on what it has.
 // Returns a layout id.
-const suggestLayout = ({ host, speakers = [], venueImage, tone } = {}) => {
+const suggestLayout = ({ host, speakers = [], venueImage, tone, content = {} } = {}) => {
   const speakerCount = speakers.length;
   const hasHost = !!(host && (host.cutout_url || host.headshot_url));
 
   // No people but a venue image → Canvas (save-the-date style)
   if (!hasHost && speakerCount === 0 && venueImage) return "canvas";
+  // No people AND barely any copy (title + when/where/cost only) →
+  // Canvas too. Monument's split text-column design needs a body of
+  // content to fill its left half; give it just a title and it renders a
+  // mostly-empty page, where Canvas's centered save-the-date panel makes
+  // the same sparse content look deliberate.
+  const hasBodyCopy = !!(content.description || (content.highlights || []).length);
+  if (!hasHost && speakerCount === 0 && !hasBodyCopy) return "canvas";
   // Warm/energetic tone with a handful of real photos reads better as a
   // scattered photo-collage than a formal speaker grid.
   const totalPhotoPeople = speakerCount + (hasHost ? 1 : 0);

@@ -24,7 +24,7 @@ const generateFlyer = async ({
 }) => {
   const tone = content.event_type || content.title || "";
   const chosenLayout =
-    layout || suggestLayout({ host, speakers, venueImage, tone });
+    layout || suggestLayout({ host, speakers, venueImage, tone, content });
 
   const toneSource = [content.title, content.subtitle, content.event_type]
     .filter(Boolean)

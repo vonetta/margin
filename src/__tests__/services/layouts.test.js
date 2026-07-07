@@ -51,8 +51,35 @@ describe("suggestLayout", () => {
     );
   });
 
-  it("falls back to monument", () => {
-    expect(suggestLayout({})).toBe("monument");
+  it("suggests canvas for sparse content (no people, no body copy), even without a venue image", () => {
+    expect(
+      suggestLayout({
+        host: null,
+        speakers: [],
+        content: { title: "Women's Self Defense Workshop", date: "Aug 15", cost: "$50" },
+      }),
+    ).toBe("canvas");
+  });
+
+  it("keeps monument when there's no host/speakers but real body copy to fill it", () => {
+    expect(
+      suggestLayout({
+        host: null,
+        speakers: [],
+        content: { title: "Worship Intensive", description: "A full day to refresh and equip." },
+      }),
+    ).toBe("monument");
+    expect(
+      suggestLayout({
+        host: null,
+        speakers: [],
+        content: { title: "Worship Intensive", highlights: ["Sessions", "Refreshing"] },
+      }),
+    ).toBe("monument");
+  });
+
+  it("falls back to canvas for completely empty input (sparse by definition)", () => {
+    expect(suggestLayout({})).toBe("canvas");
   });
 
   it("renders all four layouts without error", () => {

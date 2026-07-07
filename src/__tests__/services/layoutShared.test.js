@@ -47,3 +47,46 @@ describe("resolveDimensions", () => {
     });
   });
 });
+
+const {
+  contrastRatio,
+  ensureContrastOn,
+  gradientTextStyle,
+} = require("../../services/layouts/shared");
+
+describe("ensureContrastOn", () => {
+  it("leaves a color alone when it already clears the ratio", () => {
+    expect(ensureContrastOn("#03293F", "#ffffff", 3)).toBe("#03293F");
+  });
+
+  it("darkens a too-light color on a light background until it clears 3:1", () => {
+    // KTM's real palette: salmon accent on blush-pink background — the
+    // exact production case that rendered near-invisible subtitle text.
+    const fixed = ensureContrastOn("#EA8A8B", "#F0C7C3", 3);
+    expect(contrastRatio(fixed, "#F0C7C3")).toBeGreaterThanOrEqual(3);
+  });
+
+  it("lightens a too-dark color on a dark background", () => {
+    const fixed = ensureContrastOn("#333344", "#1a1a2e", 3);
+    expect(contrastRatio(fixed, "#1a1a2e")).toBeGreaterThanOrEqual(3);
+  });
+
+  it("passes nullish input through untouched", () => {
+    expect(ensureContrastOn(null, "#ffffff")).toBeNull();
+    expect(ensureContrastOn("#000000", null)).toBe("#000000");
+  });
+});
+
+describe("gradientTextStyle contrast correction", () => {
+  it("keeps the raw brand stops when no bg is provided (legacy behavior)", () => {
+    const css = gradientTextStyle({ gold: "#DAAE4F", accent: "#EA8A8B" });
+    expect(css).toContain("#DAAE4F");
+    expect(css).toContain("#EA8A8B");
+  });
+
+  it("replaces unreadable stops when bg is provided", () => {
+    const css = gradientTextStyle({ gold: "#DAAE4F", accent: "#EA8A8B", bg: "#F0C7C3" });
+    expect(css).not.toContain("#DAAE4F");
+    expect(css).not.toContain("#EA8A8B");
+  });
+});
