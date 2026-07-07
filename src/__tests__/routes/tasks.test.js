@@ -264,6 +264,101 @@ describe("GET /api/tasks", () => {
   });
 });
 
+describe("GET /api/tasks/similar", () => {
+  it("flags an exact-ish match (case/punctuation-insensitive)", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Rent the van",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/similar")
+      .query({ title: "rent a van!" })
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamBToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].title).toBe("Rent the van");
+    expect(res.body[0].assignee_name).toBe("Team A");
+  });
+
+  it("does not flag genuinely different titles", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Rent the van",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/similar")
+      .query({ title: "Submit the bulletin" })
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamBToken}`);
+
+    expect(res.body).toHaveLength(0);
+  });
+
+  it("ignores done tasks — only open/on_hold count as an active duplicate", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Rent the van",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "done",
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/similar")
+      .query({ title: "Rent the van" })
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamBToken}`);
+
+    expect(res.body).toHaveLength(0);
+  });
+
+  it("flags an on_hold task too", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Rent the van",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "on_hold",
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/similar")
+      .query({ title: "Rent the van" })
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamBToken}`);
+
+    expect(res.body).toHaveLength(1);
+  });
+
+  it("is scoped to the current ministry", async () => {
+    await Ministry.create({ ministry_id: "similar-other-test", name: "Other", plan: "small" });
+    await Task.create({
+      ministry_id: "similar-other-test",
+      title: "Rent the van",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/similar")
+      .query({ title: "Rent the van" })
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamBToken}`);
+
+    expect(res.body).toHaveLength(0);
+    await Ministry.deleteOne({ ministry_id: "similar-other-test" });
+    await Task.deleteMany({ ministry_id: "similar-other-test" });
+  });
+});
+
 describe("GET /api/tasks/team-overview", () => {
   it("groups open tasks by assignee for an admin, defaulting to status=active (open+on_hold)", async () => {
     await Task.create({

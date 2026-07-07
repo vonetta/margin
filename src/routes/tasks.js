@@ -29,6 +29,69 @@ const isMinistryMember = async (userId, ministryId) => {
   return !!user;
 };
 
+const normalizeTitle = (s) =>
+  s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ");
+
+// Deliberately simple (no external NLP dependency) — exact match after
+// normalizing, one title containing the other, or most of the
+// significant words (length > 2, so "the"/"to"/"a" don't count) overlap.
+// Good enough to catch "Rent the van" vs "rent a van" without a real
+// similarity library.
+const titlesAreSimilar = (a, b) => {
+  const na = normalizeTitle(a);
+  const nb = normalizeTitle(b);
+  if (!na || !nb) return false;
+  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
+
+  const wordsA = new Set(na.split(" ").filter((w) => w.length > 2));
+  const wordsB = new Set(nb.split(" ").filter((w) => w.length > 2));
+  if (wordsA.size === 0 || wordsB.size === 0) return false;
+  const shared = [...wordsA].filter((w) => wordsB.has(w)).length;
+  return shared / Math.max(wordsA.size, wordsB.size) >= 0.6;
+};
+
+// GET /api/tasks/similar?title= — checks this ministry's open/on-hold
+// tasks for a similar title, so the create form can warn before making
+// an accidental duplicate. No role gate — anyone who can create a task
+// can check for one first; read-only, no data exposed beyond what
+// GET /team-overview already would to an admin/leader (here everyone
+// just gets title/assignee/status/due_date for the few matches, not the
+// full task list).
+router.get(
+  "/similar",
+  [query("title").trim().notEmpty()],
+  validate,
+  async (req, res) => {
+    try {
+      const candidates = await Task.find({
+        ministry_id: req.ministryId,
+        status: { $in: ["open", "on_hold"] },
+      }).select("title assigned_to status due_date");
+
+      const matches = candidates.filter((t) => titlesAreSimilar(t.title, req.query.title));
+      const userIds = [...new Set(matches.map((t) => t.assigned_to))];
+      const users = await User.find({ _id: { $in: userIds } }).select("name");
+      const nameById = Object.fromEntries(users.map((u) => [u._id.toString(), u.name]));
+
+      res.json(
+        matches.slice(0, 5).map((t) => ({
+          _id: t._id,
+          title: t.title,
+          status: t.status,
+          due_date: t.due_date,
+          assignee_name: nameById[t.assigned_to] || "Someone",
+        })),
+      );
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check for similar tasks" });
+    }
+  },
+);
+
 // GET /api/tasks?status=&mine=
 // mine=true (default) restricts to tasks assigned to the caller. Anyone
 // can also see tasks they assigned to others via mine=false — there's no
