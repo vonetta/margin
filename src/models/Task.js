@@ -23,8 +23,22 @@ const taskSchema = new mongoose.Schema({
   assigned_to: { type: String, required: true },
   assigned_by: { type: String, required: true },
 
-  status: { type: String, enum: ["open", "done"], default: "open" },
+  status: { type: String, enum: ["open", "done", "on_hold"], default: "open" },
   completed_at: { type: Date },
+  hold_reason: { type: String, trim: true },
+
+  // A "shared" task (multiple people on one thing) is modeled as several
+  // ordinary single-assignee Task documents that share a group_id —
+  // deliberately NOT an array-of-assignees on one document. That would
+  // mean every existing single-assignee task needs migrating, canManage
+  // would need to be rewritten to scope to one array element (easy to
+  // get wrong and let any co-assignee touch another's row), and
+  // completing a recurring task would need cross-document consensus
+  // logic that doesn't exist today. With group_id, each person's row is
+  // a completely normal Task — canManage, complete, reopen, and
+  // recurrence rollover all work unchanged, per person, independently.
+  // Existing tasks simply have group_id: null.
+  group_id: { type: String, default: null, index: true },
 
   created_at: { type: Date, default: Date.now },
 });

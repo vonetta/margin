@@ -12,7 +12,7 @@ const testMinistry = {
   plan: "enterprise",
 };
 
-let adminToken, adminId, teamAToken, teamAId, teamBToken, outsiderToken;
+let adminToken, adminId, teamAToken, teamAId, teamBToken, teamBId, outsiderToken;
 
 beforeAll(async () => {
   await connectTestDB();
@@ -79,6 +79,7 @@ beforeEach(async () => {
     role: "team",
   });
   teamBToken = tB.body.token;
+  teamBId = tB.body.user.id;
 
   const outsider = await request(app).post("/api/auth/register").send({
     email: "tasks-outsider@other.com",
@@ -171,6 +172,56 @@ describe("POST /api/tasks", () => {
       });
     expect(res.status).toBe(400);
   });
+
+  it("creates one document per person, sharing a group_id, when assigned_to is an array", async () => {
+    const res = await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Set up the check-in table", assigned_to: [teamAId, teamBId] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.tasks).toHaveLength(2);
+    expect(res.body.group_id).toBeTruthy();
+    expect(res.body.tasks[0].group_id).toBe(res.body.group_id);
+    expect(res.body.tasks[1].group_id).toBe(res.body.group_id);
+    expect(new Set(res.body.tasks.map((t) => t.assigned_to))).toEqual(new Set([teamAId, teamBId]));
+
+    const notifications = await Notification.find({
+      ministry_id: "ktm-test",
+      user_id: { $in: [teamAId, teamBId] },
+      type: "task_assigned",
+    });
+    expect(notifications.length).toBe(2);
+  });
+
+  it("a single-element array behaves exactly like a plain string (no group_id)", async () => {
+    const res = await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Solo task", assigned_to: [teamAId] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.group_id).toBeNull();
+    expect(res.body.tasks).toBeUndefined();
+    expect(res.body.assigned_to).toBe(teamAId);
+  });
+
+  it("rejects a shared task if any one of the assignees is outside this ministry", async () => {
+    const outsiderRes = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${outsiderToken}`);
+    const outsiderId = outsiderRes.body._id;
+
+    const res = await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Should fail", assigned_to: [teamAId, outsiderId] });
+
+    expect(res.status).toBe(400);
+    const created = await Task.find({ ministry_id: "ktm-test", title: "Should fail" });
+    expect(created).toHaveLength(0);
+  });
 });
 
 describe("GET /api/tasks", () => {
@@ -214,13 +265,20 @@ describe("GET /api/tasks", () => {
 });
 
 describe("GET /api/tasks/team-overview", () => {
-  it("groups open tasks by assignee for an admin, defaulting to status=open", async () => {
+  it("groups open tasks by assignee for an admin, defaulting to status=active (open+on_hold)", async () => {
     await Task.create({
       ministry_id: "ktm-test",
       title: "Open for Team A",
       assigned_to: teamAId,
       assigned_by: adminId,
       status: "open",
+    });
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "On hold for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "on_hold",
     });
     await Task.create({
       ministry_id: "ktm-test",
@@ -237,8 +295,11 @@ describe("GET /api/tasks/team-overview", () => {
 
     expect(res.status).toBe(200);
     expect(res.body[teamAId].name).toBe("Team A");
-    expect(res.body[teamAId].tasks).toHaveLength(1);
-    expect(res.body[teamAId].tasks[0].title).toBe("Open for Team A");
+    expect(res.body[teamAId].tasks).toHaveLength(2);
+    expect(res.body[teamAId].tasks.map((t) => t.title).sort()).toEqual([
+      "On hold for Team A",
+      "Open for Team A",
+    ]);
   });
 
   it("returns only done tasks with status=done", async () => {
@@ -288,6 +349,33 @@ describe("GET /api/tasks/team-overview", () => {
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.body[teamAId].tasks).toHaveLength(2);
+  });
+
+  it("returns only on-hold tasks with status=on_hold", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Open for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "open",
+    });
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Blocked for Team A",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "on_hold",
+      hold_reason: "Waiting on vendor",
+    });
+
+    const res = await request(app)
+      .get("/api/tasks/team-overview?status=on_hold")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.body[teamAId].tasks).toHaveLength(1);
+    expect(res.body[teamAId].tasks[0].title).toBe("Blocked for Team A");
+    expect(res.body[teamAId].tasks[0].hold_reason).toBe("Waiting on vendor");
   });
 
   it("is blocked for a plain team member", async () => {
@@ -388,6 +476,146 @@ describe("PUT /api/tasks/:id/complete and /reopen", () => {
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("open");
+  });
+});
+
+describe("PUT /api/tasks/:id/hold", () => {
+  it("puts a task on hold with an optional reason", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Waiting on the vendor",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/hold`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`)
+      .send({ reason: "Waiting on Franco to confirm the venue" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("on_hold");
+    expect(res.body.hold_reason).toBe("Waiting on Franco to confirm the venue");
+  });
+
+  it("clears hold_reason and completed_at when reopened from hold", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Waiting on the vendor",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "on_hold",
+      hold_reason: "Blocked",
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/reopen`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("open");
+    expect(res.body.hold_reason).toBeUndefined();
+  });
+
+  it("rejects a teammate who isn't the assignee, assigner, or admin/leader", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Waiting on the vendor",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/hold`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamBToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /api/tasks/:id/assignees", () => {
+  it("adds a co-assignee as a new sibling document sharing a group_id", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Set up the check-in table",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .post(`/api/tasks/${task._id}/assignees`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ user_id: teamBId });
+
+    expect(res.status).toBe(201);
+    expect(res.body.assigned_to).toBe(teamBId);
+    expect(res.body.title).toBe("Set up the check-in table");
+    expect(res.body.group_id).toBeTruthy();
+
+    const original = await Task.findById(task._id);
+    expect(original.group_id).toBe(res.body.group_id);
+
+    const notification = await Notification.findOne({ ministry_id: "ktm-test", user_id: teamBId });
+    expect(notification).toBeTruthy();
+  });
+
+  it("does not touch the original document's own assignment", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Set up the check-in table",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "done",
+      completed_at: new Date(),
+    });
+
+    await request(app)
+      .post(`/api/tasks/${task._id}/assignees`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ user_id: teamBId });
+
+    const original = await Task.findById(task._id);
+    expect(original.status).toBe("done");
+    expect(original.assigned_to).toBe(teamAId);
+  });
+
+  it("rejects adding someone outside this ministry", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Set up the check-in table",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+    const outsiderRes = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${outsiderToken}`);
+
+    const res = await request(app)
+      .post(`/api/tasks/${task._id}/assignees`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ user_id: outsiderRes.body._id });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects adding someone who's already assigned", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Set up the check-in table",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .post(`/api/tasks/${task._id}/assignees`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ user_id: teamAId });
+
+    expect(res.status).toBe(400);
   });
 });
 

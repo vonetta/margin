@@ -1,11 +1,14 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
 const { body, query, validationResult } = require("express-validator");
 const Task = require("../models/Task");
 const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
 const { notifyTaskAssigned } = require("../services/notificationService");
 const { isValidRecurrenceRule, nextOccurrenceAfter } = require("../services/calendarService");
+
+const STATUSES = ["open", "done", "on_hold"];
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -33,7 +36,7 @@ const isMinistryMember = async (userId, ministryId) => {
 // creation itself isn't role-gated.
 router.get(
   "/",
-  [query("status").optional().isIn(["open", "done"])],
+  [query("status").optional().isIn(STATUSES)],
   validate,
   async (req, res) => {
     try {
@@ -54,24 +57,31 @@ router.get(
   },
 );
 
-// GET /api/tasks/team-overview?status=open|done|all — every task in this
-// ministry grouped by assignee (open by default, matching the original
-// "who's working on what" purpose of this endpoint). Unlike GET /, which
-// only ever shows the caller's own tasks (assigned to them or assigned by
-// them), this is the "see where everyone stands" view, so it's
-// admin/leader gated the way Events' pending-approval list already is.
-// Keyed by user id (not name) so a client can use the key directly as a
-// real assigned_to value — e.g. the Tasks board's drag-to-reassign.
+// GET /api/tasks/team-overview?status=open|done|on_hold|active|all — every
+// task in this ministry grouped by assignee ("active" — open+on_hold —
+// by default, matching the board's "what's still being worked" view).
+// Unlike GET /, which only ever shows the caller's own tasks (assigned
+// to them or assigned by them), this is the "see where everyone stands"
+// view, so it's admin/leader gated the way Events' pending-approval
+// list already is. Keyed by user id (not name) so a client can use the
+// key directly as a real assigned_to value — e.g. the Tasks board's
+// add-a-co-assignee action.
 router.get(
   "/team-overview",
   requireRole("admin", "leader"),
-  [query("status").optional().isIn(["open", "done", "all"])],
+  // "active" is a query-only shorthand (open + on_hold — the board's
+  // default working view) alongside the real per-task statuses and the
+  // "all" (no filter, includes done) escape hatch.
+  [query("status").optional().isIn([...STATUSES, "all", "active"])],
   validate,
   async (req, res) => {
     try {
       const filter = { ministry_id: req.ministryId };
-      if (req.query.status !== "all") {
-        filter.status = req.query.status === "done" ? "done" : "open";
+      const status = req.query.status || "active";
+      if (status === "active") {
+        filter.status = { $in: ["open", "on_hold"] };
+      } else if (status !== "all") {
+        filter.status = status;
       }
       const tasks = await Task.find(filter).sort({ due_date: 1 });
       const userIds = [...new Set(tasks.map((t) => t.assigned_to))];
@@ -91,12 +101,25 @@ router.get(
   },
 );
 
+// A "shared" task with N people becomes N sibling Task documents, all
+// sharing one group_id — see the comment on Task.group_id for why this
+// shape was chosen over an array-of-assignees on one document.
+const newGroupId = () => crypto.randomUUID();
+
 // POST /api/tasks
+// assigned_to may be a single id (today's shape, one document, no
+// group_id — completely unchanged) or an array of ids (a shared task —
+// one document per person, all sharing a fresh group_id).
 router.post(
   "/",
   [
     body("title").trim().notEmpty().withMessage("Title is required"),
-    body("assigned_to").trim().notEmpty().withMessage("assigned_to is required"),
+    body("assigned_to")
+      .custom((value) => {
+        const ids = Array.isArray(value) ? value : [value];
+        return ids.length > 0 && ids.every((id) => typeof id === "string" && id.trim().length > 0);
+      })
+      .withMessage("assigned_to is required"),
     body("description").optional().trim(),
     body("due_date").optional().isISO8601(),
     body("recurrence_rule")
@@ -118,24 +141,38 @@ router.post(
         return res.status(400).json({ error: "A recurring task needs a due_date to anchor the recurrence" });
       }
 
-      const eligible = await isMinistryMember(assigned_to, req.ministryId);
-      if (!eligible) {
-        return res.status(400).json({
-          error: "assigned_to must be a member of this ministry",
-        });
+      const assigneeIds = [...new Set(Array.isArray(assigned_to) ? assigned_to : [assigned_to])];
+
+      for (const id of assigneeIds) {
+        const eligible = await isMinistryMember(id, req.ministryId);
+        if (!eligible) {
+          return res.status(400).json({
+            error: "assigned_to must be a member of this ministry",
+          });
+        }
       }
 
-      const task = await Task.create({
+      const groupId = assigneeIds.length > 1 ? newGroupId() : null;
+      const shared = {
         ministry_id: req.ministryId,
         title,
         description,
         due_date: due_date ? new Date(due_date) : undefined,
         recurrence_rule: recurrence_rule || undefined,
-        assigned_to,
         assigned_by: req.userId.toString(),
-      });
-      await notifyTaskAssigned({ ministryId: req.ministryId, task });
-      res.status(201).json(task);
+        group_id: groupId,
+      };
+
+      const tasks = await Promise.all(
+        assigneeIds.map((id) => Task.create({ ...shared, assigned_to: id })),
+      );
+      await Promise.all(tasks.map((task) => notifyTaskAssigned({ ministryId: req.ministryId, task })));
+
+      if (tasks.length > 1) {
+        res.status(201).json({ group_id: groupId, tasks });
+      } else {
+        res.status(201).json(tasks[0]);
+      }
     } catch (error) {
       console.error("Task creation error:", error);
       res.status(500).json({ error: "Failed to create task" });
@@ -206,6 +243,59 @@ router.put(
   },
 );
 
+// POST /api/tasks/:id/assignees — adds a co-assignee to an existing
+// task by creating a new sibling Task document (same title/description/
+// due_date/recurrence_rule/ministry_id/assigned_by), sharing a group_id
+// with the original. This is what both the kanban board's drag-to-a-
+// column and its keyboard-alternative reassign control call — "add,"
+// never "replace," so a task's existing assignees are never silently
+// dropped. Removing someone is just DELETE on their own document.
+router.post(
+  "/:id/assignees",
+  [body("user_id").trim().notEmpty().withMessage("user_id is required")],
+  validate,
+  async (req, res) => {
+    try {
+      const task = await Task.findOne({ _id: req.params.id, ministry_id: req.ministryId });
+      if (!task) return res.status(404).json({ error: "Task not found" });
+      if (!canManage(req, task)) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+
+      const { user_id } = req.body;
+      const eligible = await isMinistryMember(user_id, req.ministryId);
+      if (!eligible) {
+        return res.status(400).json({ error: "user_id must be a member of this ministry" });
+      }
+      if (user_id === task.assigned_to) {
+        return res.status(400).json({ error: "That person is already assigned to this task" });
+      }
+
+      if (!task.group_id) {
+        task.group_id = newGroupId();
+        await task.save();
+      }
+
+      const newTask = await Task.create({
+        ministry_id: req.ministryId,
+        title: task.title,
+        description: task.description,
+        due_date: task.due_date,
+        recurrence_rule: task.recurrence_rule,
+        assigned_by: task.assigned_by,
+        group_id: task.group_id,
+        assigned_to: user_id,
+      });
+      await notifyTaskAssigned({ ministryId: req.ministryId, task: newTask });
+
+      res.status(201).json(newTask);
+    } catch (error) {
+      console.error("Add assignee error:", error);
+      res.status(500).json({ error: "Failed to add assignee" });
+    }
+  },
+);
+
 // PUT /api/tasks/:id/complete
 // Completing a recurring task also rolls a fresh "open" task forward to
 // the next occurrence (same title/description/assignee), rather than
@@ -221,8 +311,16 @@ router.put("/:id/complete", async (req, res) => {
     }
     task.status = "done";
     task.completed_at = new Date();
+    task.hold_reason = undefined;
     await task.save();
 
+    // Each person's row rolls forward independently the moment THEY
+    // finish — there's no "wait for every co-assignee" check. Simpler
+    // (no cross-document consensus/race to get right) and avoids the
+    // real problem a shared task with a slow co-assignee would
+    // otherwise create: the fast finisher would see nothing next cycle.
+    // The rolled-forward task keeps the same group_id, so it still
+    // shows alongside a still-open sibling from the current occurrence.
     let nextTask = null;
     if (task.recurrence_rule && task.due_date) {
       const nextDue = nextOccurrenceAfter(task.recurrence_rule, task.due_date, task.due_date);
@@ -235,6 +333,7 @@ router.put("/:id/complete", async (req, res) => {
           recurrence_rule: task.recurrence_rule,
           assigned_to: task.assigned_to,
           assigned_by: task.assigned_by,
+          group_id: task.group_id,
         });
         await notifyTaskAssigned({ ministryId: req.ministryId, task: nextTask });
       }
@@ -246,7 +345,8 @@ router.put("/:id/complete", async (req, res) => {
   }
 });
 
-// PUT /api/tasks/:id/reopen
+// PUT /api/tasks/:id/reopen — also used to come back off hold, since
+// "open" is the only non-terminal state to return to either from.
 router.put("/:id/reopen", async (req, res) => {
   try {
     const task = await Task.findOne({ _id: req.params.id, ministry_id: req.ministryId });
@@ -256,12 +356,38 @@ router.put("/:id/reopen", async (req, res) => {
     }
     task.status = "open";
     task.completed_at = undefined;
+    task.hold_reason = undefined;
     await task.save();
     res.json(task);
   } catch (error) {
     res.status(500).json({ error: "Failed to reopen task" });
   }
 });
+
+// PUT /api/tasks/:id/hold — pauses a task without marking it done or
+// reassigning it (e.g. blocked on someone else). Per-person, like every
+// other status change here — one row, one person's state.
+router.put(
+  "/:id/hold",
+  [body("reason").optional().trim()],
+  validate,
+  async (req, res) => {
+    try {
+      const task = await Task.findOne({ _id: req.params.id, ministry_id: req.ministryId });
+      if (!task) return res.status(404).json({ error: "Task not found" });
+      if (!canManage(req, task)) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+      task.status = "on_hold";
+      task.hold_reason = req.body.reason || undefined;
+      task.completed_at = undefined;
+      await task.save();
+      res.json(task);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to put this task on hold" });
+    }
+  },
+);
 
 // DELETE /api/tasks/:id
 router.delete("/:id", async (req, res) => {
