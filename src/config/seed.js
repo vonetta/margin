@@ -6,6 +6,18 @@ const AiProfile = require("../models/AiProfile");
 dotenv.config();
 
 const seedKTM = async () => {
+  // This script DELETES the live ktm Ministry + AiProfile and recreates
+  // them from the hardcoded values below — wiping any edits made in the
+  // app since. The local .env points at the production database, so a
+  // NODE_ENV check wouldn't protect anything; require an explicit,
+  // unambiguous opt-in instead so this can never run by reflex.
+  if (process.env.SEED_CONFIRM !== "yes-wipe-ktm") {
+    console.error(
+      "Refusing to run: this replaces the LIVE ktm ministry and AI profile with hardcoded seed data.\n" +
+        "If you really mean it: SEED_CONFIRM=yes-wipe-ktm npm run seed",
+    );
+    process.exit(1);
+  }
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log("Connected to MongoDB");
