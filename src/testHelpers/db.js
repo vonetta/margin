@@ -10,6 +10,13 @@ const mongoose = require("mongoose");
 const connectTestDB = async () => {
   if (mongoose.connection.readyState === 0) {
     await mongoose.connect(process.env.MONGODB_URI);
+  } else if (mongoose.connection.readyState === 2) {
+    // Requiring app.js already STARTED a connection (its own connectDB
+    // fires at require time) — wait for that handshake to finish instead
+    // of skipping. Model queries never noticed the gap because mongoose
+    // buffers them, but anything reading readyState directly (the
+    // /health endpoint) does.
+    await mongoose.connection.asPromise();
   }
   return mongoose.connection;
 };

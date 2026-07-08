@@ -25,9 +25,20 @@ const socialAuthRoutes = require("./routes/socialAuth");
 const publicSocialCallbackRoutes = require("./routes/publicSocialCallback");
 const socialPostRoutes = require("./routes/socialPosts");
 const { rehydrateScheduledPosts } = require("./services/socialPostScheduler");
+const { checkMongo, checkAi } = require("./services/healthService");
 dotenv.config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
 });
+
+// Error tracking activates only when a DSN is configured — until then
+// every Sentry call below is a no-op, so local/test runs need nothing.
+const Sentry = require("@sentry/node");
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "production",
+  });
+}
 
 connectDB().then(() => {
   // In-memory timers don't exist until now — nothing to rehydrate during
@@ -80,8 +91,31 @@ const aiLimiter = rateLimit({
 app.use("/api", limiter);
 app.use("/api/content/generate", aiLimiter);
 
+// Railway's deploy healthcheck points here, so this must reflect only
+// what should block a deploy: the process is up and Mongo is reachable.
+// AI-provider problems (e.g. an empty Anthropic credit balance) are a
+// degradation, not a reason to fail deploys of the whole API — those
+// surface on /health/deep instead.
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", message: "Margin API running" });
+  const mongoOk = checkMongo();
+  res
+    .status(mongoOk ? 200 : 503)
+    .json({ status: mongoOk ? "ok" : "degraded", mongo: mongoOk ? "ok" : "down" });
+});
+
+// The endpoint an uptime monitor should watch: Mongo plus a cached
+// 1-token Anthropic canary (the only check that catches a valid key
+// with no credit — the outage that actually happened). Returns 503 on
+// any failure so a dumb HTTP monitor alerts without parsing the body.
+app.get("/health/deep", async (req, res) => {
+  const mongoOk = checkMongo();
+  const ai = await checkAi();
+  const ok = mongoOk && ai.ok === true;
+  res.status(ok ? 200 : 503).json({
+    status: ok ? "ok" : "degraded",
+    mongo: mongoOk ? "ok" : "down",
+    ai,
+  });
 });
 
 // Auth routes — public, no tenant or auth middleware
@@ -131,6 +165,8 @@ app.get("/api/test", (req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  // No-op unless SENTRY_DSN is configured (see init at the top).
+  Sentry.captureException(err);
   console.error(err.stack);
   res.status(500).json({ error: "Something went wrong" });
 });
