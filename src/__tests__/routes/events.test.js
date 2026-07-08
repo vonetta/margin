@@ -1,5 +1,6 @@
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
+const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Event = require("../../models/Event");
@@ -42,7 +43,7 @@ beforeEach(async () => {
   });
   adminToken = a.body.token;
 
-  const t = await request(app).post("/api/auth/register").send({
+  const t = await registerMember(app, {
     email: "events-team@ktm.com",
     password: "Password123",
     name: "T",

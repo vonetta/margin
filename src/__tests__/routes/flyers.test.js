@@ -24,6 +24,7 @@ jest.mock("../../services/imageService", () => ({
 
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
+const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Flyer = require("../../models/Flyer");
@@ -80,9 +81,7 @@ beforeEach(async () => {
       role: "admin",
     });
   adminToken = a.body.token;
-  const t = await request(app)
-    .post("/api/auth/register")
-    .send({
+  const t = await registerMember(app, {
       email: "flyer-team@ktm.com",
       password: "Password123",
       name: "T",

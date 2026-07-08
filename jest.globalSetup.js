@@ -11,6 +11,7 @@ module.exports = async () => {
     "people",
     "users",
     "contentdrafts",
+    "invites",
   ]) {
     try {
       await mongoose.connection.collection(c).deleteMany({

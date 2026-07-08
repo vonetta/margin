@@ -1,5 +1,6 @@
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
+const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const User = require("../../models/User");
 const Ministry = require("../../models/Ministry");
@@ -109,22 +110,46 @@ describe("POST /api/auth/register", () => {
     expect(res.body.user.password).toBeUndefined();
   });
 
-  it("blocks registering past a small plan's team member cap (5)", async () => {
-    for (let i = 0; i < 5; i++) {
-      const res = await request(app).post("/api/auth/register").send({
+  it("requires an invite for anyone after a ministry's first member", async () => {
+    await request(app).post("/api/auth/register").send(testUser);
+
+    const res = await request(app).post("/api/auth/register").send({
+      email: "gate-crasher@ktm.com",
+      password: "Password123",
+      name: "Gate Crasher",
+      ministry_id: "ktm-test",
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("An invite is required to join this ministry");
+    expect(await User.findOne({ email: "gate-crasher@ktm.com" })).toBeNull();
+  });
+
+  it("blocks registering past a small plan's team member cap (5), even with a valid invite", async () => {
+    // First member bootstraps without an invite; the rest join through
+    // real invites — the cap must bind on both paths.
+    const first = await request(app).post("/api/auth/register").send({
+      email: "cap-user-0@second.com",
+      password: "Password123",
+      name: "Cap User 0",
+      ministry_id: "second-test",
+    });
+    expect(first.status).toBe(201);
+    for (let i = 1; i < 5; i++) {
+      const res = await registerMember(app, {
+        ministry_id: "second-test",
         email: `cap-user-${i}@second.com`,
         password: "Password123",
         name: `Cap User ${i}`,
-        ministry_id: "second-test",
       });
       expect(res.status).toBe(201);
     }
 
-    const res = await request(app).post("/api/auth/register").send({
+    const res = await registerMember(app, {
+      ministry_id: "second-test",
       email: "cap-user-6@second.com",
       password: "Password123",
       name: "Sixth User",
-      ministry_id: "second-test",
     });
     expect(res.status).toBe(402);
     expect(res.body.error).toContain("small plan allows up to 5 team members");

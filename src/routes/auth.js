@@ -68,6 +68,16 @@ router.post(
         return res.status(402).json({ error: planLimitError("team_members", ministry.plan) });
       }
 
+      // The duplicate check runs before the invite requirement so someone
+      // who's already on the roster gets the accurate error, not a
+      // misleading "you need an invite."
+      let user = await User.findOne({ email });
+      if (user && user.getMembership(ministry_id)) {
+        return res
+          .status(400)
+          .json({ error: "Already a member of this ministry" });
+      }
+
       let assignedRole;
       let invite = null;
 
@@ -82,26 +92,25 @@ router.post(
         // The whole point of an invite: the admin who sent it decided the
         // role, not whatever the registration form happens to submit.
         assignedRole = invite.role;
+      } else if (existingMemberCount === 0) {
+        // Bootstrapping: a brand-new ministry's very first member may
+        // self-register (there's nobody who could have invited them) and
+        // grant themselves elevated access.
+        assignedRole = role || "admin";
       } else {
-        // Self-service registration without an invite still works (e.g. a
-        // ministry sharing its own ministry_id directly) — but only the
-        // very first member may grant themselves elevated access.
-        // Everyone after that is "team" unless an admin invites them at a
-        // higher role or promotes them via the Team page.
-        assignedRole = existingMemberCount === 0 ? role || "admin" : "team";
+        // Everyone after the first member needs a real invite. ministry_id
+        // is not a secret — it's embedded by design in the public calendar
+        // feed URL on ministry websites — so knowing it must not be enough
+        // to put yourself on a tenant's roster and read its people
+        // directory.
+        return res
+          .status(403)
+          .json({ error: "An invite is required to join this ministry" });
       }
 
       const hashedPassword = await bcrypt.hash(password, 12);
 
-      let user = await User.findOne({ email });
-
       if (user) {
-        const alreadyMember = user.getMembership(ministry_id);
-        if (alreadyMember) {
-          return res
-            .status(400)
-            .json({ error: "Already a member of this ministry" });
-        }
         user.ministries.push({ ministry_id, role: assignedRole });
         await user.save();
       } else {

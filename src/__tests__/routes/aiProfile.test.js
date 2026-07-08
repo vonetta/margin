@@ -1,5 +1,6 @@
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
+const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const AiProfile = require("../../models/AiProfile");
@@ -27,6 +28,8 @@ const testProfile = {
   },
 };
 
+const SopDraft = require("../../models/SopDraft");
+
 let authToken;
 
 beforeAll(async () => {
@@ -36,12 +39,17 @@ beforeAll(async () => {
 afterAll(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await AiProfile.deleteMany({ ministry_id: "ktm-test" });
+  await SopDraft.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({ email: "profile-test@ktm.com" });
 });
 
 beforeEach(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await AiProfile.deleteMany({ ministry_id: "ktm-test" });
+  // This suite has historically hung mid-run in this sandbox (Puppeteer)
+  // before afterAll cleanup could fire, so stray drafts accumulate in
+  // the shared test database — clear them up front, every run.
+  await SopDraft.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({ email: "profile-test@ktm.com" });
   await Ministry.create(testMinistry);
   await AiProfile.create(testProfile);
@@ -282,7 +290,7 @@ describe("POST /api/profile/sops", () => {
 describe("Role enforcement on profile edits", () => {
   it("rejects a team-role user from editing voice profile", async () => {
     await User.deleteMany({ email: "team-test@ktm.com" });
-    const teamRes = await request(app).post("/api/auth/register").send({
+    const teamRes = await registerMember(app, {
       email: "team-test@ktm.com",
       password: "Password123",
       name: "Team Member",
@@ -308,7 +316,7 @@ describe("Role enforcement on profile edits", () => {
 describe("GET /api/profile/sops/drafts", () => {
   it("rejects a team-role user — SOPs can carry payment/vendor detail, same bar as the mutating routes", async () => {
     await User.deleteMany({ email: "team-test@ktm.com" });
-    const teamRes = await request(app).post("/api/auth/register").send({
+    const teamRes = await registerMember(app, {
       email: "team-test@ktm.com",
       password: "Password123",
       name: "Team Member",
@@ -370,7 +378,7 @@ describe("GET /api/profile/sops/drafts/:id/export", () => {
     const id = await createDraft();
 
     await User.deleteMany({ email: "team-test@ktm.com" });
-    const teamRes = await request(app).post("/api/auth/register").send({
+    const teamRes = await registerMember(app, {
       email: "team-test@ktm.com",
       password: "Password123",
       name: "Team Member",

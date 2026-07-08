@@ -1,5 +1,6 @@
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
+const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Task = require("../../models/Task");
@@ -61,21 +62,21 @@ beforeEach(async () => {
   adminToken = a.body.token;
   adminId = a.body.user.id;
 
-  const tA = await request(app).post("/api/auth/register").send({
+  const tA = await registerMember(app, {
+    ministry_id: "ktm-test",
     email: "tasks-teamA@ktm.com",
     password: "Password123",
     name: "Team A",
-    ministry_id: "ktm-test",
     role: "team",
   });
   teamAToken = tA.body.token;
   teamAId = tA.body.user.id;
 
-  const tB = await request(app).post("/api/auth/register").send({
+  const tB = await registerMember(app, {
+    ministry_id: "ktm-test",
     email: "tasks-teamB@ktm.com",
     password: "Password123",
     name: "Team B",
-    ministry_id: "ktm-test",
     role: "team",
   });
   teamBToken = tB.body.token;

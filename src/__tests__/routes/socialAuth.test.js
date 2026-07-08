@@ -12,6 +12,7 @@ jest.mock("../../services/metaGraphService", () => ({
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const { connectTestDB } = require("../../testHelpers/db");
+const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const User = require("../../models/User");
@@ -53,7 +54,7 @@ beforeEach(async () => {
   adminToken = a.body.token;
   adminId = a.body.user.id;
 
-  const t = await request(app).post("/api/auth/register").send({
+  const t = await registerMember(app, {
     email: "social-team@ktm.com",
     password: "Password123",
     name: "Team",

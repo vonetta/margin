@@ -1,5 +1,6 @@
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
+const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const User = require("../../models/User");
@@ -42,7 +43,7 @@ beforeEach(async () => {
   });
   adminToken = a.body.token;
 
-  const t = await request(app).post("/api/auth/register").send({
+  const t = await registerMember(app, {
     email: "invites-team@ktm.com",
     password: "Password123",
     name: "Team",
@@ -282,7 +283,12 @@ describe("POST /api/auth/register with an invite_token", () => {
     expect(res.status).toBe(400);
   });
 
-  it("still hard-locks a non-invited registrant (after the first member) to team", async () => {
+  it("refuses a non-invited registrant entirely once the ministry has a first member", async () => {
+    // ministry_id is not a secret (it's embedded in the public calendar
+    // feed URL on ministry websites), so knowing it must not be enough to
+    // join a tenant's roster — this path used to grant a "team"
+    // membership, which exposed the full people directory to anyone who
+    // read a ministry's website source.
     const res = await request(app).post("/api/auth/register").send({
       email: "newperson@ktm.com",
       password: "Password123",
@@ -290,7 +296,7 @@ describe("POST /api/auth/register with an invite_token", () => {
       ministry_id: "ktm-test",
       role: "admin",
     });
-    expect(res.status).toBe(201);
-    expect(res.body.user.ministries[0].role).toBe("team");
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("An invite is required to join this ministry");
   });
 });
