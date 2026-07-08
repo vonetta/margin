@@ -6,6 +6,7 @@ const Person = require("../models/Person");
 const Ministry = require("../models/Ministry");
 const AiProfile = require("../models/AiProfile");
 const { requireRole } = require("../middleware/auth");
+const { aiLimiter } = require("../middleware/rateLimiters");
 const { generateFlyer } = require("../services/flyerService");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { listLayouts, suggestLayout } = require("../services/layouts");
@@ -45,6 +46,7 @@ router.get("/layouts", (req, res) => {
 router.post(
   "/background-preview",
   requireRole("admin", "leader"),
+  aiLimiter,
   [body("topic_hint").optional().trim()],
   validate,
   async (req, res) => {
@@ -93,6 +95,7 @@ router.get("/", async (req, res) => {
 router.post(
   "/generate",
   requireRole("admin", "leader"),
+  aiLimiter,
   [
     body("title").trim().notEmpty().withMessage("Title is required"),
     body("layout").optional().trim(),
@@ -325,6 +328,7 @@ router.post(
 router.post(
   "/:id/generate-caption",
   requireRole("admin", "leader"),
+  aiLimiter,
   [body("platform").optional().trim().isIn(["Instagram", "Facebook", "Email", "Quote card"])],
   validate,
   async (req, res) => {

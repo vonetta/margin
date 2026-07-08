@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const { body, validationResult } = require("express-validator");
 const { generateContent, chatTurn } = require("../services/generationService");
+const { aiLimiter } = require("../middleware/rateLimiters");
 const { extractFlyerDetails } = require("../services/imageService");
 const { withApprovedSops } = require("../services/sopService");
 const AiProfile = require("../models/AiProfile");
@@ -36,6 +37,7 @@ const VALID_PLATFORMS = ["Instagram", "Facebook", "Email", "Quote card"];
 // POST /api/content/generate
 router.post(
   "/generate",
+  aiLimiter,
   [
     body("prompt").trim().notEmpty().withMessage("Prompt is required"),
     body("platform")
@@ -97,6 +99,7 @@ router.post(
 // history and resends it in full each turn — no server-side session state.
 router.post(
   "/chat",
+  aiLimiter,
   [
     body("platform")
       .trim()

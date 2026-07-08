@@ -5,6 +5,7 @@ const { body, validationResult } = require("express-validator");
 const AiProfile = require("../models/AiProfile");
 const SopDraft = require("../models/SopDraft");
 const { requireRole } = require("../middleware/auth");
+const { aiLimiter } = require("../middleware/rateLimiters");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { draftSopFromImages } = require("../services/imageService");
 const { exportSopAsPdf } = require("../services/sopExportService");
@@ -314,6 +315,7 @@ router.post(
 router.post(
   "/sops/draft",
   requireRole("admin", "leader"),
+  aiLimiter,
   upload.array("images", 8),
   [body("notes").optional().trim()],
   validate,

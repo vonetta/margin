@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # A hang (e.g. a headless-Chromium launch that never resolves) fails
+    # the job visibly instead of burning CI minutes for hours.
+    timeout-minutes: 20
+
+    # An ephemeral MongoDB service container — the CI test run never
+    # touches the shared Atlas cluster the local .env.test points at, so
+    # a mis-set env var can't reach production data from here. This is
+    # the automated half of "move tests off the production cluster."
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    env:
+      NODE_ENV: test
+      MONGODB_URI: mongodb://localhost:27017/margin_ci
+      JWT_SECRET: ci-test-jwt-secret-not-a-real-secret
+      JWT_EXPIRES_IN: 7d
+      # A throwaway 32-byte hex key so encryption.js can construct — never
+      # used to protect anything real; CI encrypts/decrypts only fixtures.
+      TOKEN_ENCRYPTION_KEY: 0b2c9e26cb942ba93f7cbe6f9ac8754683237b96e2d4400c8c8bb1c4070f94eb
+      META_APP_ID: ci-test-meta-app-id
+      META_APP_SECRET: ci-test-meta-app-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Puppeteer's bundled Chromium needs a couple of system libs to
+      # launch headless on the CI runner (a handful of flyer/SOP export
+      # tests render real HTML to PNG/PDF).
+      - name: Install Chromium system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libgbm1 libasound2t64 libpango-1.0-0 libcairo2
+
+      - run: npm test

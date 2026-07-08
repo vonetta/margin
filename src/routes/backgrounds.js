@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const Background = require("../models/Background");
 const { requireRole } = require("../middleware/auth");
+const { aiLimiter } = require("../middleware/rateLimiters");
 const { generateBackground } = require("../services/imageService");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const Ministry = require("../models/Ministry");
@@ -50,6 +51,7 @@ router.get("/", async (req, res) => {
 router.post(
   "/generate",
   requireRole("admin", "leader"),
+  aiLimiter,
   [
     body("prompt").trim().notEmpty().withMessage("Prompt is required"),
     body("tone").optional().trim(),

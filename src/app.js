@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+const { generalLimiter } = require("./middleware/rateLimiters");
 const connectDB = require("./config/db");
 const tenantMiddleware = require("./middleware/tenant");
 const { authMiddleware, requireOnboarding } = require("./middleware/auth");
@@ -66,30 +66,13 @@ app.use(
 );
 app.use(express.json({ limit: "10kb" }));
 
-// Real request patterns don't apply in tests — a single test file can
-// legitimately fire more requests in seconds than a real client would in
-// 15 minutes (e.g. re-registering fixture users in every test's
-// beforeEach), so the limiter would otherwise start rejecting requests
-// partway through a run and produce failures that have nothing to do
-// with the behavior under test.
-const skip = () => process.env.NODE_ENV === "test";
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: "Too many requests, please try again later" },
-  skip,
-});
-
-const aiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: "Too many generation requests, please slow down" },
-  skip,
-});
-
-app.use("/api", limiter);
-app.use("/api/content/generate", aiLimiter);
+// General per-IP ceiling on the whole API. The tighter aiLimiter is
+// applied per-handler inside each router (flyers/backgrounds/content/
+// meetings/aiProfile) on just the endpoints that call a paid AI
+// provider, so it covers every generation path — not only
+// /api/content/generate, which was the sole endpoint protected before —
+// without throttling cheap reads on those same resources.
+app.use("/api", generalLimiter);
 
 // Railway's deploy healthcheck points here, so this must reflect only
 // what should block a deploy: the process is up and Mongo is reachable.

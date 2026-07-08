@@ -6,6 +6,7 @@ const MeetingTaskDraft = require("../models/MeetingTaskDraft");
 const Task = require("../models/Task");
 const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
+const { aiLimiter } = require("../middleware/rateLimiters");
 const { notifyTaskAssigned } = require("../services/notificationService");
 const {
   parseTranscriptText,
@@ -67,6 +68,7 @@ const resolveTargetMinistry = (ministryName, family, homeMinistryId) => {
 router.post(
   "/transcript",
   requireRole("admin", "leader"),
+  aiLimiter,
   upload.single("transcript"),
   [
     body("text").optional().trim(),
