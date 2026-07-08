@@ -9,6 +9,8 @@ const { aiLimiter } = require("../middleware/rateLimiters");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { draftSopFromImages } = require("../services/imageService");
 const { exportSopAsPdf } = require("../services/sopExportService");
+const { buildProfileFromWebsite } = require("../services/onboardingScraperService");
+const { UrlSafetyError } = require("../services/urlSafetyService");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -30,6 +32,39 @@ const validate = (req, res, next) => {
   }
   next();
 };
+
+// POST /api/profile/onboarding/prefill — the AI-prefill step of onboarding.
+// Fetches the ministry's own website (SSRF-guarded) and drafts a brand-voice
+// profile from it via Gemini. Returns a DRAFT only — nothing is written
+// here; the onboarding wizard pre-fills its editable fields from this and
+// the admin saves through the normal /voice, /hashtags, /ministry endpoints.
+// A UrlSafetyError (bad/blocked URL, non-HTML page) is a 400 the user can
+// act on, distinct from a 500 model/parse failure.
+router.post(
+  "/onboarding/prefill",
+  requireRole("admin", "leader"),
+  aiLimiter,
+  [
+    body("website_url").trim().notEmpty().withMessage("A website URL is required"),
+    body("past_posts").optional().trim(),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const draft = await buildProfileFromWebsite({
+        websiteUrl: req.body.website_url,
+        pastPosts: req.body.past_posts || "",
+      });
+      res.json(draft);
+    } catch (error) {
+      if (error instanceof UrlSafetyError) {
+        return res.status(400).json({ error: error.message });
+      }
+      console.error("Onboarding prefill error:", error);
+      res.status(500).json({ error: "Couldn't build a profile from that website" });
+    }
+  },
+);
 
 // GET /api/profile
 // Get full AI profile for current ministry

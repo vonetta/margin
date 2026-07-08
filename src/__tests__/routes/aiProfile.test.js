@@ -1,3 +1,8 @@
+const mockBuildProfileFromWebsite = jest.fn();
+jest.mock("../../services/onboardingScraperService", () => ({
+  buildProfileFromWebsite: (...a) => mockBuildProfileFromWebsite(...a),
+}));
+
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
 const { registerMember } = require("../../testHelpers/register");
@@ -5,6 +10,7 @@ const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const AiProfile = require("../../models/AiProfile");
 const User = require("../../models/User");
+const { UrlSafetyError } = require("../../services/urlSafetyService");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -63,6 +69,79 @@ beforeEach(async () => {
   });
 
   authToken = res.body.token;
+  mockBuildProfileFromWebsite.mockReset();
+});
+
+describe("POST /api/profile/onboarding/prefill", () => {
+  it("returns the drafted profile for an admin", async () => {
+    mockBuildProfileFromWebsite.mockResolvedValue({
+      voice_profile: { persona_name: "Grace", tone_pillars: ["warm"], sample_phrases: [], avoid: [] },
+      suggested_colors: { primary: "#2b4a7a", accent: "" },
+      hashtags: { brand: ["#Grace"], content: [] },
+      source: { url: "https://grace.org/", title: "Grace", had_readable_text: true },
+    });
+
+    const res = await request(app)
+      .post("/api/profile/onboarding/prefill")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ website_url: "https://grace.org" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.voice_profile.persona_name).toBe("Grace");
+    expect(mockBuildProfileFromWebsite).toHaveBeenCalledWith({
+      websiteUrl: "https://grace.org",
+      pastPosts: "",
+    });
+  });
+
+  it("requires a website_url", async () => {
+    const res = await request(app)
+      .post("/api/profile/onboarding/prefill")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(mockBuildProfileFromWebsite).not.toHaveBeenCalled();
+  });
+
+  it("maps a UrlSafetyError (blocked/bad URL) to a 400 with its message", async () => {
+    mockBuildProfileFromWebsite.mockRejectedValue(new UrlSafetyError("That address isn't allowed"));
+    const res = await request(app)
+      .post("/api/profile/onboarding/prefill")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ website_url: "http://169.254.169.254" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("That address isn't allowed");
+  });
+
+  it("maps an unexpected model/parse failure to a 500", async () => {
+    mockBuildProfileFromWebsite.mockRejectedValue(new Error("Could not parse the drafted profile"));
+    const res = await request(app)
+      .post("/api/profile/onboarding/prefill")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ website_url: "https://grace.org" });
+    expect(res.status).toBe(500);
+  });
+
+  it("blocks a team member (admin/leader only)", async () => {
+    const team = await registerMember(app, {
+      ministry_id: "ktm-test",
+      email: "team-test@ktm.com",
+      password: "Password123",
+      name: "Team",
+      role: "team",
+    });
+    const res = await request(app)
+      .post("/api/profile/onboarding/prefill")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${team.body.token}`)
+      .send({ website_url: "https://grace.org" });
+    expect(res.status).toBe(403);
+    await User.deleteMany({ email: "team-test@ktm.com" });
+  });
 });
 
 describe("GET /api/profile", () => {
