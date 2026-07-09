@@ -103,7 +103,7 @@ const DEFAULT_DESIGN_DIRECTION =
 // Shared with overlayLogo below so the space the prompt asks the model to
 // leave blank is the same space the real logo actually gets pasted into.
 const LOGO_AREA = {
-  widthRatio: 0.34, // the logo's own rendered width, as a fraction of canvas width
+  widthRatio: 0.22, // the logo's own rendered width, as a fraction of canvas width
   topMarginRatio: 0.045, // how far down from the top the reserved strip starts
   // A rough estimate of how tall the composited band ends up (logo
   // height + padding, as a fraction of canvas height) — used only to
@@ -112,7 +112,7 @@ const LOGO_AREA = {
   // aspect ratio at composite time in overlayLogo; this is just guidance
   // for a prompt that the model isn't guaranteed to follow precisely
   // anyway (the composite itself is what guarantees no collision).
-  estimatedHeightRatio: 0.32,
+  estimatedHeightRatio: 0.21,
 };
 
 const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null }) => {
