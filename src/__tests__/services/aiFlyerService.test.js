@@ -50,7 +50,7 @@ describe("buildFullFlyerPrompt", () => {
       content: { title: "Worship Intensive" },
     });
     expect(prompt).not.toContain("OFFICIAL LOGO");
-    expect(prompt).toContain("blank area at the top-center");
+    expect(prompt).toContain("horizontal strip completely blank across the FULL WIDTH");
     expect(prompt).toContain("composited there afterward");
     expect(prompt).toContain("light, neutral, low-contrast backdrop");
     expect(prompt).not.toContain("called KTM");
@@ -61,7 +61,7 @@ describe("buildFullFlyerPrompt", () => {
       branding: { name: "KTM" },
       content: { title: "Worship Intensive" },
     });
-    expect(prompt).not.toContain("blank area at the top-center");
+    expect(prompt).not.toContain("horizontal strip completely blank across the FULL WIDTH");
     expect(prompt).toContain("called KTM");
   });
 

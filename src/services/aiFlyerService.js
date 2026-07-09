@@ -102,7 +102,18 @@ const DEFAULT_DESIGN_DIRECTION =
 
 // Shared with overlayLogo below so the space the prompt asks the model to
 // leave blank is the same space the real logo actually gets pasted into.
-const LOGO_AREA = { widthRatio: 0.34, topMarginRatio: 0.045 };
+const LOGO_AREA = {
+  widthRatio: 0.34, // the logo's own rendered width, as a fraction of canvas width
+  topMarginRatio: 0.045, // how far down from the top the reserved strip starts
+  // A rough estimate of how tall the composited band ends up (logo
+  // height + padding, as a fraction of canvas height) — used only to
+  // tell the model approximately how much vertical space to leave clear.
+  // The actual band height is computed exactly from the logo's real
+  // aspect ratio at composite time in overlayLogo; this is just guidance
+  // for a prompt that the model isn't guaranteed to follow precisely
+  // anyway (the composite itself is what guarantees no collision).
+  estimatedHeightRatio: 0.32,
+};
 
 const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null }) => {
   const colors = branding.colors || {};
@@ -151,7 +162,7 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
   // misspelled. The actual logo file gets composited into this reserved
   // area afterward (see overlayLogo), guaranteeing it's pixel-accurate.
   const logoLine = hasLogo
-    ? `Leave a clean, completely blank area at the top-center of the canvas, roughly ${Math.round(LOGO_AREA.widthRatio * 100)}% of the image width and starting about ${Math.round(LOGO_AREA.topMarginRatio * 100)}% of the way down from the top — no text, no icons, no shapes. The organization's real full-color logo will be composited there afterward, so this area MUST have a light, neutral, low-contrast backdrop (near-white, cream, or a soft light tint of the palette) directly behind it, even if the rest of the design uses darker tones — never a dark or visually busy background in that specific area, since an unpredictable backdrop risks making the logo's own colors and any text it contains hard to read. Do NOT letter the organization's name, initials, or any text wordmark anywhere else in the design either; the logo already carries that.`
+    ? `Leave a horizontal strip completely blank across the FULL WIDTH of the canvas at the very top, starting about ${Math.round(LOGO_AREA.topMarginRatio * 100)}% of the way down and roughly ${Math.round(LOGO_AREA.estimatedHeightRatio * 100)}% of the image height tall — no title text, no headline, no icons, no shapes, no decorative elements should extend into this strip from either side. Compose the title and the rest of the design to begin BELOW this strip, not overlapping or bleeding into it. The organization's real full-color logo will be composited into this strip afterward, so it also MUST have a light, neutral, low-contrast backdrop (near-white, cream, or a soft light tint of the palette), even if the rest of the design uses darker tones. Do NOT letter the organization's name, initials, or any text wordmark anywhere else in the design either; the logo already carries that.`
     : "";
 
   return `Design a polished, professional event flyer image for a church/ministry organization${branding.name && !hasLogo ? ` called ${branding.name}` : ""}, portrait orientation.
@@ -216,15 +227,18 @@ const overlayQr = async (pngBuffer, qrUrl, { darkColor } = {}) => {
 // Composites the ministry's REAL logo file onto the generated flyer,
 // top-center, in the area the prompt asked the model to leave blank
 // (LOGO_AREA) — never the model's own re-drawn interpretation of it.
-// The model doesn't reliably honor spatial "leave this blank" requests
-// (it drew a title headline straight through the reserved area in one
-// real generation, colliding badly with the pasted-on logo) — so, exactly
-// like overlayQr below, the logo is never composited directly onto
-// whatever the model drew; it always sits on its own opaque backing
-// panel first, which fully covers anything underneath regardless of
-// whether the model actually left that space blank. Best-effort: a
-// failed logo fetch just skips the overlay rather than failing the whole
-// flyer, matching fetchImageReference's posture elsewhere in this file.
+// The model doesn't reliably honor spatial "leave this blank" requests.
+// A first attempt at fixing this backed the logo with an opaque panel
+// sized to the logo itself — which covers the logo's own area, but a
+// real generation's title text spans the FULL canvas width (edge to
+// edge), so it still poked out on both sides of a centered, logo-sized
+// panel and cut across a subtitle badge below it. The band therefore has
+// to span the FULL WIDTH of the canvas, not just the logo's width, so
+// nothing the model drew in that horizontal strip can bleed through on
+// either side — exactly like overlayQr below never lets anything show
+// through its backing square. Best-effort: a failed logo fetch just
+// skips the overlay rather than failing the whole flyer, matching
+// fetchImageReference's posture elsewhere in this file.
 const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
   const logo = await fetchImageReference(logoUrl);
   if (!logo) return pngBuffer;
@@ -239,31 +253,23 @@ const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
     .toBuffer();
   const { height: logoHeight } = await sharp(resizedLogo).metadata();
 
-  const padX = Math.round(logoWidth * 0.08);
-  const padY = Math.round(logoHeight * 0.1);
-  const panelWidth = logoWidth + padX * 2;
-  const panelHeight = logoHeight + padY * 2;
+  const padY = Math.round(logoHeight * 0.15);
+  const bandHeight = logoHeight + padY * 2;
 
-  const panel = await sharp({
+  const band = await sharp({
     create: {
-      width: panelWidth,
-      height: panelHeight,
+      width: canvasWidth,
+      height: bandHeight,
       channels: 4,
       background: backingColor || { r: 255, g: 255, b: 255, alpha: 1 },
     },
   })
-    .composite([{ input: resizedLogo, top: padY, left: padX }])
+    .composite([{ input: resizedLogo, top: padY, left: Math.round((canvasWidth - logoWidth) / 2) }])
     .png()
     .toBuffer();
 
   return sharp(pngBuffer)
-    .composite([
-      {
-        input: panel,
-        top: topMargin,
-        left: Math.round((canvasWidth - panelWidth) / 2),
-      },
-    ])
+    .composite([{ input: band, top: topMargin, left: 0 }])
     .png()
     .toBuffer();
 };
