@@ -255,6 +255,8 @@ router.post(
           speakers,
           qrUrl: qr_url || null,
           size: "social",
+          typeSystem,
+          resolvedTone,
         });
 
         const socialUp = await uploadFile({

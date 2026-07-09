@@ -22,6 +22,14 @@ jest.mock("../../services/imageService", () => ({
   generateBackground: (...args) => mockGenerateBackground(...args),
 }));
 
+const mockGenerateAiFlyer = jest.fn().mockResolvedValue({
+  png: Buffer.from("fake-ai-flyer-png"),
+  meta: { engine: "ai", tone: null, has_qr: false, reference_image_count: 0 },
+});
+jest.mock("../../services/aiFlyerService", () => ({
+  generateAiFlyer: (...args) => mockGenerateAiFlyer(...args),
+}));
+
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
 const { registerMember } = require("../../testHelpers/register");
@@ -191,6 +199,27 @@ describe("POST /api/flyers/generate", () => {
     expect(res.status).toBe(201);
     const callArgs = mockGenerateFlyer.mock.calls[0][0];
     expect(callArgs.resolvedTone).toBeUndefined();
+  });
+
+  it("threads typeSystem and the resolved tone through to the AI Studio engine too, not just the template engine", async () => {
+    await AiProfile.create({
+      ministry_id: "ktm-test",
+      type_system: { tone_keywords: { formal: ["conference"], energetic: ["night"] } },
+    });
+    mockGenerateAiFlyer.mockClear();
+
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Night", tone: "energetic", engine: "ai" });
+
+    expect(res.status).toBe(201);
+    const callArgs = mockGenerateAiFlyer.mock.calls[0][0];
+    expect(callArgs.resolvedTone).toBe("energetic");
+    expect(callArgs.typeSystem).toEqual(
+      expect.objectContaining({ tone_keywords: expect.anything() }),
+    );
   });
 
   it("auto-creates a pending calendar event when the date parses", async () => {

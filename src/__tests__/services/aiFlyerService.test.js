@@ -55,6 +55,76 @@ describe("buildFullFlyerPrompt", () => {
     });
     expect(prompt).toContain("no large empty single-color areas");
   });
+
+  // The bug this exists to fix: a casual event ("Pizza Party") rendered
+  // with the same gala/elegant-serif design direction as a formal
+  // conference — the AI-image path never received any tone signal at
+  // all before this, unlike the deterministic template engine.
+  const typeSystem = {
+    tone_keywords: { formal: ["ordination", "conference"], energetic: ["youth", "night"] },
+    fonts: [
+      { name: "Cinzel", roles: ["display"], tones: ["formal", "classic"] },
+      { name: "Montserrat", roles: ["body", "display"], tones: ["formal", "warm", "energetic"] },
+    ],
+  };
+  const branding = {
+    name: "KTM",
+    colors: { primary: "#03293F", gold: "#DAAE4F" },
+    fonts: { heading: "Cinzel", body: "Montserrat" },
+  };
+
+  it("keeps today's gala/elegant direction and the ministry's default font for a formal tone", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding,
+      content: { title: "Ordination Service" },
+      typeSystem,
+      tone: "formal",
+    });
+    expect(prompt).toContain("Typography feel: Cinzel headlines");
+    expect(prompt).toContain("gala or church-event invitation");
+  });
+
+  it("keeps today's default direction when no tone is resolved at all", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding,
+      content: { title: "Some Event" },
+      typeSystem,
+      tone: null,
+    });
+    expect(prompt).toContain("gala or church-event invitation");
+  });
+
+  it("switches to a bold, casual direction and typography for an energetic tone", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding,
+      content: { title: "Pizza Party" },
+      typeSystem,
+      tone: "energetic",
+    });
+    expect(prompt).not.toContain("gala or church-event invitation");
+    expect(prompt).not.toContain("Cinzel");
+    expect(prompt).toContain("bold, energetic, modern event-flyer design");
+    expect(prompt).toContain("nothing that reads formal or ornate");
+  });
+
+  it("switches to a warm direction for a warm tone", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding,
+      content: { title: "Family Fellowship Picnic" },
+      typeSystem,
+      tone: "warm",
+    });
+    expect(prompt).toContain("warm, inviting, relational event-flyer design");
+  });
+
+  it("falls back to the ministry's default branding font when there's no typeSystem at all", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding,
+      content: { title: "Some Event" },
+      tone: null,
+    });
+    expect(prompt).toContain("Typography feel: Cinzel headlines, clean Montserrat body text.");
+  });
 });
 
 describe("generateAiFlyer", () => {
@@ -128,5 +198,46 @@ describe("generateAiFlyer", () => {
     await expect(
       generateAiFlyer({ branding: {}, content: { title: "Worship Intensive" } }),
     ).rejects.toThrow("No image returned from Gemini");
+  });
+
+  describe("tone resolution", () => {
+    const typeSystem = {
+      tone_keywords: { formal: ["ordination"], energetic: ["youth", "night", "pizza"] },
+    };
+
+    beforeEach(() => {
+      mockGenerateFullFlyer.mockImplementation(() => fakePng());
+    });
+
+    it("uses resolvedTone directly when provided, skipping keyword inference", async () => {
+      const result = await generateAiFlyer({
+        branding: {},
+        content: { title: "Ordination Service" }, // would keyword-infer "formal"
+        typeSystem,
+        resolvedTone: "energetic",
+      });
+      expect(result.meta.tone).toBe("energetic");
+      expect(mockGenerateFullFlyer.mock.calls[0][0]).toContain("nothing that reads formal or ornate");
+    });
+
+    it("falls back to keyword inference when resolvedTone is omitted (manual-entry path)", async () => {
+      const result = await generateAiFlyer({
+        branding: {},
+        content: { title: "Pizza Night" },
+        typeSystem,
+      });
+      expect(result.meta.tone).toBe("energetic");
+    });
+
+    it("treats resolvedTone: null as explicitly no tone, not 'run inference'", async () => {
+      const result = await generateAiFlyer({
+        branding: {},
+        content: { title: "Pizza Night" }, // would keyword-infer "energetic"
+        typeSystem,
+        resolvedTone: null,
+      });
+      expect(result.meta.tone).toBeNull();
+      expect(mockGenerateFullFlyer.mock.calls[0][0]).toContain("gala or church-event invitation");
+    });
   });
 });
