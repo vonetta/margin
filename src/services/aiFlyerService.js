@@ -31,13 +31,17 @@ const fetchImageReference = async (url) => {
 const MAX_REFERENCE_IMAGES = 4;
 
 // Each reference keeps a role/name label alongside its image data, so the
-// prompt can tell the model exactly what each attached image IS (e.g. "the
-// second image is your official logo, reproduce it exactly") instead of
-// leaving it to guess — which is how a generic invented logo/cross icon
-// replaces the ministry's actual mark.
-const gatherReferenceImages = async ({ branding, host, speakers }) => {
+// prompt can tell the model exactly what each attached image IS. The logo
+// is deliberately NOT gathered here — earlier versions sent it as a
+// "reproduce this exactly" reference, but the model doesn't literally
+// copy reference pixels, it re-draws its own interpretation, and re-drawn
+// small text (a multi-word wordmark) is exactly where these models
+// introduce typos ("GLOBAL MINISTTIES"). The real logo file is composited
+// on afterward instead — see overlayLogo, same principle already applied
+// to the QR code below (never trust the model to draw something that has
+// to be pixel-accurate to work).
+const gatherReferenceImages = async ({ host, speakers }) => {
   const candidates = [
-    branding?.logo_url && { role: "logo", name: null, url: branding.logo_url },
     host && (host.cutout_url || host.headshot_url)
       ? { role: "host", name: host.name, url: host.cutout_url || host.headshot_url }
       : null,
@@ -59,9 +63,6 @@ const describeReferenceImages = (referenceImages) =>
   referenceImages
     .map((ref, i) => {
       const n = i + 1;
-      if (ref.role === "logo") {
-        return `Attached image ${n} is the organization's OFFICIAL LOGO — reproduce it exactly as given (same mark, same colors), do not redesign, restyle, or invent a substitute logo.`;
-      }
       const roleLabel = ref.role === "host" ? "the host" : "a speaker";
       return `Attached image ${n} is a real photo of ${ref.name || roleLabel} (${roleLabel}) — incorporate their actual likeness naturally into the design (a portrait cutout, a circular frame, or similar), don't replace them with a generic stand-in.`;
     })
@@ -98,6 +99,10 @@ const designLanguageForTone = (tone) => {
 
 const DEFAULT_DESIGN_DIRECTION =
   "sophisticated, editorial event-flyer design — think a well-designed gala or church-event invitation, not a generic template. Use tasteful typography hierarchy and a refined color-blocked or gradient background using the brand palette.";
+
+// Shared with overlayLogo below so the space the prompt asks the model to
+// leave blank is the same space the real logo actually gets pasted into.
+const LOGO_AREA = { widthRatio: 0.34, topMarginRatio: 0.045 };
 
 const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null }) => {
   const colors = branding.colors || {};
@@ -140,7 +145,16 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
 
   const referenceLine = describeReferenceImages(referenceImages);
 
-  return `Design a polished, professional event flyer image for a church/ministry organization${branding.name ? ` called ${branding.name}` : ""}, portrait orientation.
+  const hasLogo = !!branding.logo_url;
+  // Never asks the model to letter the organization's name anywhere when
+  // a real logo exists — that's exactly how a re-drawn wordmark ends up
+  // misspelled. The actual logo file gets composited into this reserved
+  // area afterward (see overlayLogo), guaranteeing it's pixel-accurate.
+  const logoLine = hasLogo
+    ? `Leave a clean, completely blank area at the top-center of the canvas, roughly ${Math.round(LOGO_AREA.widthRatio * 100)}% of the image width and starting about ${Math.round(LOGO_AREA.topMarginRatio * 100)}% of the way down from the top — no text, no icons, no shapes. The organization's real full-color logo will be composited there afterward, so this area MUST have a light, neutral, low-contrast backdrop (near-white, cream, or a soft light tint of the palette) directly behind it, even if the rest of the design uses darker tones — never a dark or visually busy background in that specific area, since an unpredictable backdrop risks making the logo's own colors and any text it contains hard to read. Do NOT letter the organization's name, initials, or any text wordmark anywhere else in the design either; the logo already carries that.`
+    : "";
+
+  return `Design a polished, professional event flyer image for a church/ministry organization${branding.name && !hasLogo ? ` called ${branding.name}` : ""}, portrait orientation.
 
 Brand colors: ${palette || "a tasteful, cohesive palette"}. ${fontLine}
 
@@ -148,6 +162,8 @@ Event details — render this text EXACTLY as written, spelled correctly, no typ
 ${textLines}
 
 ${referenceLine}
+
+${logoLine}
 
 Design direction: ${toneDesign?.direction || DEFAULT_DESIGN_DIRECTION} Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements across the entire composition, in keeping with the direction above. No stock-photo clutter, no placeholder people beyond the reference photos provided. Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward. This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
 };
@@ -197,6 +213,37 @@ const overlayQr = async (pngBuffer, qrUrl, { darkColor } = {}) => {
     .toBuffer();
 };
 
+// Composites the ministry's REAL logo file onto the generated flyer,
+// top-center, in the exact area the prompt asked the model to leave
+// blank (LOGO_AREA) — never the model's own re-drawn interpretation of
+// it. Best-effort: a failed logo fetch just skips the overlay rather
+// than failing the whole flyer, matching fetchImageReference's posture
+// elsewhere in this file.
+const overlayLogo = async (pngBuffer, logoUrl) => {
+  const logo = await fetchImageReference(logoUrl);
+  if (!logo) return pngBuffer;
+
+  const { width: canvasWidth, height: canvasHeight } = await sharp(pngBuffer).metadata();
+  const logoWidth = Math.round(canvasWidth * LOGO_AREA.widthRatio);
+  const topMargin = Math.round(canvasHeight * LOGO_AREA.topMarginRatio);
+
+  const resizedLogo = await sharp(logo.buffer)
+    .resize({ width: logoWidth })
+    .png()
+    .toBuffer();
+
+  return sharp(pngBuffer)
+    .composite([
+      {
+        input: resizedLogo,
+        top: topMargin,
+        left: Math.round((canvasWidth - logoWidth) / 2),
+      },
+    ])
+    .png()
+    .toBuffer();
+};
+
 // Generate a full designer-style flyer directly via image generation,
 // instead of the deterministic HTML/CSS template pipeline in
 // flyerService.js. A real QR code is always composited on afterward, never
@@ -216,7 +263,7 @@ const generateAiFlyer = async ({
   // "no tone preference."
   resolvedTone,
 }) => {
-  const referenceImages = await gatherReferenceImages({ branding, host, speakers });
+  const referenceImages = await gatherReferenceImages({ host, speakers });
   const toneSource = [content.title, content.subtitle, content.description].filter(Boolean).join(" ");
   const tone =
     resolvedTone !== undefined ? resolvedTone : inferTone(toneSource, typeSystem?.tone_keywords);
@@ -225,6 +272,9 @@ const generateAiFlyer = async ({
 
   let png = await generateFullFlyer(prompt, referenceImages, { aspectRatio });
 
+  if (branding.logo_url) {
+    png = await overlayLogo(png, branding.logo_url);
+  }
   if (qrUrl) {
     png = await overlayQr(png, qrUrl, { darkColor: branding.colors?.primary });
   }
@@ -235,6 +285,7 @@ const generateAiFlyer = async ({
       engine: "ai",
       size,
       tone,
+      has_logo: !!branding.logo_url,
       has_qr: !!qrUrl,
       reference_image_count: referenceImages.length,
       host: host?.name || null,

@@ -37,14 +37,32 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("real photo");
   });
 
-  it("instructs the model to reproduce an attached logo exactly, not invent one", () => {
+  // The model doesn't literally copy reference pixels — it re-draws its
+  // own interpretation, and re-drawn small text (a multi-word wordmark)
+  // is exactly where these models introduce typos. So the logo is never
+  // sent as an "reproduce exactly" image reference; instead the prompt
+  // reserves blank space for the real file to be composited in afterward
+  // (see the aiFlyerService.test.js generateAiFlyer describe block for
+  // the actual overlayLogo compositing coverage).
+  it("reserves blank top-center space for the logo instead of asking the model to draw it, when a logo exists", () => {
     const prompt = buildFullFlyerPrompt({
-      branding: {},
+      branding: { name: "KTM", logo_url: "https://example.com/logo.png" },
       content: { title: "Worship Intensive" },
-      referenceImages: [{ role: "logo", name: null }],
     });
-    expect(prompt).toContain("OFFICIAL LOGO");
-    expect(prompt).toContain("do not redesign");
+    expect(prompt).not.toContain("OFFICIAL LOGO");
+    expect(prompt).toContain("blank area at the top-center");
+    expect(prompt).toContain("composited there afterward");
+    expect(prompt).toContain("light, neutral, low-contrast backdrop");
+    expect(prompt).not.toContain("called KTM");
+  });
+
+  it("says nothing about reserving logo space when the ministry has no logo", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM" },
+      content: { title: "Worship Intensive" },
+    });
+    expect(prompt).not.toContain("blank area at the top-center");
+    expect(prompt).toContain("called KTM");
   });
 
   it("tells the model not to leave large empty dead space", () => {
@@ -238,6 +256,64 @@ describe("generateAiFlyer", () => {
       });
       expect(result.meta.tone).toBeNull();
       expect(mockGenerateFullFlyer.mock.calls[0][0]).toContain("gala or church-event invitation");
+    });
+  });
+
+  describe("logo compositing (never trusts the model to draw the real logo)", () => {
+    const fakeLogoPng = () =>
+      sharp({
+        create: { width: 400, height: 400, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+      })
+        .png()
+        .toBuffer();
+
+    it("composites the real logo onto the flyer, distinct from a flyer with no logo", async () => {
+      const basePng = await fakePng();
+      mockGenerateFullFlyer.mockResolvedValue(basePng);
+      const logoBuffer = await fakeLogoPng();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => logoBuffer.buffer.slice(logoBuffer.byteOffset, logoBuffer.byteOffset + logoBuffer.byteLength),
+        headers: { get: () => "image/png" },
+      });
+
+      const result = await generateAiFlyer({
+        branding: { logo_url: "https://example.com/logo.png", colors: {} },
+        content: { title: "Worship Intensive" },
+      });
+
+      expect(result.meta.has_logo).toBe(true);
+      expect(result.png.equals(basePng)).toBe(false);
+      const meta = await sharp(result.png).metadata();
+      expect(meta.width).toBe(1080);
+      expect(meta.height).toBe(1350);
+    });
+
+    it("does not composite anything, and reports has_logo: false, when the ministry has no logo", async () => {
+      const basePng = await fakePng();
+      mockGenerateFullFlyer.mockResolvedValue(basePng);
+
+      const result = await generateAiFlyer({
+        branding: { colors: {} },
+        content: { title: "Worship Intensive" },
+      });
+
+      expect(result.meta.has_logo).toBe(false);
+      expect(result.png.equals(basePng)).toBe(true);
+    });
+
+    it("skips the overlay gracefully (doesn't fail the flyer) when the logo fetch fails", async () => {
+      const basePng = await fakePng();
+      mockGenerateFullFlyer.mockResolvedValue(basePng);
+      global.fetch = jest.fn().mockResolvedValue({ ok: false });
+
+      const result = await generateAiFlyer({
+        branding: { logo_url: "https://example.com/logo.png", colors: {} },
+        content: { title: "Worship Intensive" },
+      });
+
+      expect(result.meta.has_logo).toBe(true);
+      expect(result.png.equals(basePng)).toBe(true);
     });
   });
 });
