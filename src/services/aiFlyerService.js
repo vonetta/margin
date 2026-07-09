@@ -100,25 +100,20 @@ const designLanguageForTone = (tone) => {
 const DEFAULT_DESIGN_DIRECTION =
   "sophisticated, editorial event-flyer design — think a well-designed gala or church-event invitation, not a generic template. Use tasteful typography hierarchy and a refined color-blocked or gradient background using the brand palette.";
 
+// A top-center band directly behind the model's own headline went through
+// several rounds of ratio-tuning and never fully stopped colliding with
+// the title — a centered logo and a centered headline are structurally
+// fighting for the exact same real estate, and the model's placement
+// varies enough per-generation that no fixed ratio reliably wins. The QR
+// code, by contrast, has never once collided with anything across any of
+// these generations — because it lives in a corner, which is never where
+// a centered headline goes. The logo now follows that same proven
+// pattern: a small corner badge instead of a full-width hero band.
 // Shared with overlayLogo below so the space the prompt asks the model to
 // leave blank is the same space the real logo actually gets pasted into.
 const LOGO_AREA = {
-  widthRatio: 0.22, // the logo's own rendered width, as a fraction of canvas width
-  topMarginRatio: 0.045, // how far down from the top the reserved strip starts
-  // A rough estimate of how tall the composited band ends up (logo
-  // height + padding, as a fraction of canvas height) — used only to
-  // tell the model approximately how much vertical space to leave clear.
-  // MUST stay >= the real footprint computed in overlayLogo (currently
-  // ~0.23 for a roughly-square logo, at widthRatio 0.22 with the padY/
-  // fadeZone below) — a prior version of this number (0.21) understated
-  // the real band by several points, so the model placed the title
-  // expecting less coverage than the band actually had, and the title
-  // ended up partially hidden underneath it. Deliberately padded a bit
-  // above the computed value as a safety margin, since a taller logo
-  // (a wide horizontal lockup vs. a stacked square mark) isn't known
-  // until the real file is fetched at composite time — better to ask
-  // the model to over-clear than under-clear.
-  estimatedHeightRatio: 0.27,
+  widthRatio: 0.16, // similar proportion to the QR code's own corner badge
+  margin: 0.05, // distance from the canvas edge, as a fraction of width
 };
 
 const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null }) => {
@@ -166,18 +161,20 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
   // Never asks the model to letter the organization's name anywhere when
   // a real logo exists — that's exactly how a re-drawn wordmark ends up
   // misspelled. The actual logo file gets composited into this reserved
-  // area afterward (see overlayLogo), guaranteeing it's pixel-accurate.
+  // corner afterward (see overlayLogo), guaranteeing it's pixel-accurate.
+  // A small top-left corner badge, not a full-width band — the event
+  // title is centered and reliably large, so a corner is structurally
+  // never where it lands (the QR code, which already lives in a corner,
+  // has never once collided with anything across any generation).
   const logoLine = hasLogo
-    ? `Leave a horizontal strip completely blank across the FULL WIDTH of the canvas at the very top, starting about ${Math.round(LOGO_AREA.topMarginRatio * 100)}% of the way down and roughly ${Math.round(LOGO_AREA.estimatedHeightRatio * 100)}% of the image height tall — no icons, no shapes, no decorative elements should extend into this strip from either side. The organization's real full-color logo will be composited into this strip afterward, so it also MUST have a light, neutral, low-contrast backdrop (near-white, cream, or a soft light tint of the palette), even if the rest of the design uses darker tones.
-
-This blank strip is ONLY for the organization's own logo/wordmark — it is NOT about the event's title. The event title ("${content.title || ""}") is completely different content, is REQUIRED, and MUST still be a large, prominent headline elsewhere in the design (typically directly below this strip) — do not shrink it, hide it, or omit it just because the top strip is reserved. The only thing forbidden in the design is re-lettering the ORGANIZATION's own name/initials as a separate wordmark (e.g. do not write out "${branding.name || "the organization's name"}" anywhere) — the logo already carries that; the event title is a different thing entirely and must still appear boldly.`
+    ? `Leave a small square area completely blank in the TOP-LEFT CORNER of the canvas, about ${Math.round(LOGO_AREA.widthRatio * 100)}% of the image width and starting right at the edge with a small margin — no text, no icons, no shapes there. The organization's real full-color logo will be composited into that corner afterward, so it also MUST have a light, neutral backdrop directly behind it (near-white, cream, or a soft light tint of the palette) even if the rest of the design uses darker tones — the same treatment already used for the QR-code corner. Never letter the organization's own name/initials as separate text anywhere in the design (e.g. do not write out "${branding.name || "the organization's name"}") — the logo already carries that. This does NOT apply to the event's own title, which is different content and must still be a large, prominent headline as usual.`
     : "";
 
   return `Design a polished, professional event flyer image for a church/ministry organization${branding.name && !hasLogo ? ` called ${branding.name}` : ""}, portrait orientation.
 
 Brand colors: ${palette || "a tasteful, cohesive palette"}. ${fontLine}
 
-Event details — render this text EXACTLY as written, spelled correctly, no typos, no garbled or illegible letters, no invented details beyond what's listed. Use proper title case or sentence case for the title and headlines — never render headline text in all-lowercase:
+Event details — render this text EXACTLY as written, spelled correctly, no typos, no garbled or illegible letters, no invented details beyond what's listed. Use proper title case or sentence case for the title and headlines — never render headline text in all-lowercase. Do not add any other text anywhere in the design beyond what's listed here plus the organization's name — no invented promo codes, taglines, hashtags, extra labels, or filler numbers/strings of any kind:
 ${textLines}
 
 ${referenceLine}
@@ -232,75 +229,44 @@ const overlayQr = async (pngBuffer, qrUrl, { darkColor } = {}) => {
     .toBuffer();
 };
 
-// Composites the ministry's REAL logo file onto the generated flyer,
-// top-center, in the area the prompt asked the model to leave blank
-// (LOGO_AREA) — never the model's own re-drawn interpretation of it.
-// The model doesn't reliably honor spatial "leave this blank" requests.
-// A first attempt at fixing this backed the logo with an opaque panel
-// sized to the logo itself — which covers the logo's own area, but a
-// real generation's title text spans the FULL canvas width (edge to
-// edge), so it still poked out on both sides of a centered, logo-sized
-// panel and cut across a subtitle badge below it. The band therefore has
-// to span the FULL WIDTH of the canvas, not just the logo's width, so
-// nothing the model drew in that horizontal strip can bleed through on
-// either side — exactly like overlayQr below never lets anything show
-// through its backing square.
-//
-// A solid-color rectangular band reads as an obvious pasted-on bar
-// against most real generations, though, so its bottom edge fades to
-// fully transparent via a gradient instead of cutting off sharply — the
-// coverage guarantee that actually matters (directly behind and around
-// the logo itself, where collisions happen) stays fully opaque; only the
-// mostly-empty lower portion of the band, below the logo, blends away.
-//
-// Best-effort: a failed logo fetch just skips the overlay rather than
-// failing the whole flyer, matching fetchImageReference's posture
-// elsewhere in this file.
-const overlayLogo = async (pngBuffer, logoUrl, { backingColorHex = "#ffffff" } = {}) => {
+// Composites the ministry's REAL logo file onto the generated flyer, in
+// the top-left corner — never the model's own re-drawn interpretation of
+// it (see LOGO_AREA above for why a corner, not a top-center band). Same
+// structure as overlayQr just above: the logo sits on its own opaque
+// backing square, so coverage is guaranteed by the compositing itself
+// regardless of whether the model actually left that corner blank —
+// exactly the QR code's proven, collision-free pattern. Best-effort: a
+// failed logo fetch just skips the overlay rather than failing the whole
+// flyer, matching fetchImageReference's posture elsewhere in this file.
+const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
   const logo = await fetchImageReference(logoUrl);
   if (!logo) return pngBuffer;
 
-  const { width: canvasWidth, height: canvasHeight } = await sharp(pngBuffer).metadata();
-  const logoWidth = Math.round(canvasWidth * LOGO_AREA.widthRatio);
-  const topMargin = Math.round(canvasHeight * LOGO_AREA.topMarginRatio);
+  const { width: canvasWidth } = await sharp(pngBuffer).metadata();
+  const logoSize = Math.round(canvasWidth * LOGO_AREA.widthRatio);
+  const pad = Math.round(logoSize * 0.12);
+  const margin = Math.round(canvasWidth * LOGO_AREA.margin);
 
   const resizedLogo = await sharp(logo.buffer)
-    .resize({ width: logoWidth })
+    .resize({ width: logoSize })
     .png()
     .toBuffer();
-  const { height: logoHeight } = await sharp(resizedLogo).metadata();
+  const { height: resizedHeight } = await sharp(resizedLogo).metadata();
 
-  const padY = Math.round(logoHeight * 0.1);
-  // Extra room below the logo's own opaque area for the gradient to fade
-  // through, rather than the fade eating into the logo's padding itself.
-  // Short on purpose — a wide fade zone reads as a washed-out ghost over
-  // whatever the model drew right below the strip (typically the title,
-  // per the prompt's "must appear directly below this strip" instruction),
-  // rather than either clearly hidden or clearly visible. A quick fade
-  // finishes before reaching content that's actually meant to be seen.
-  const fadeZone = Math.round(logoHeight * 0.12);
-  const opaqueHeight = logoHeight + padY * 2;
-  const bandHeight = opaqueHeight + fadeZone;
-  const opaqueFraction = Math.round((opaqueHeight / bandHeight) * 100);
-
-  const bandSvg = `<svg width="${canvasWidth}" height="${bandHeight}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${backingColorHex}" stop-opacity="1"/>
-        <stop offset="${opaqueFraction}%" stop-color="${backingColorHex}" stop-opacity="1"/>
-        <stop offset="100%" stop-color="${backingColorHex}" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <rect width="100%" height="100%" fill="url(#fade)"/>
-  </svg>`;
-
-  const band = await sharp(Buffer.from(bandSvg))
-    .composite([{ input: resizedLogo, top: padY, left: Math.round((canvasWidth - logoWidth) / 2) }])
+  const backing = await sharp({
+    create: {
+      width: logoSize + pad * 2,
+      height: resizedHeight + pad * 2,
+      channels: 4,
+      background: backingColor || { r: 255, g: 255, b: 255, alpha: 1 },
+    },
+  })
+    .composite([{ input: resizedLogo, top: pad, left: pad }])
     .png()
     .toBuffer();
 
   return sharp(pngBuffer)
-    .composite([{ input: band, top: topMargin, left: 0 }])
+    .composite([{ input: backing, top: margin, left: margin }])
     .png()
     .toBuffer();
 };

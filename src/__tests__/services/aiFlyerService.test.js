@@ -44,15 +44,21 @@ describe("buildFullFlyerPrompt", () => {
   // reserves blank space for the real file to be composited in afterward
   // (see the aiFlyerService.test.js generateAiFlyer describe block for
   // the actual overlayLogo compositing coverage).
-  it("reserves blank top-center space for the logo instead of asking the model to draw it, when a logo exists", () => {
+  // A top-center band directly competed with the model's own centered
+  // headline for the same real estate across several rounds of tuning
+  // and never fully stopped colliding with it. The logo now follows the
+  // QR code's proven corner pattern instead — a corner structurally
+  // isn't where a centered headline goes, which is exactly why the QR
+  // code has never once collided with anything.
+  it("reserves a small top-left corner for the logo instead of asking the model to draw it, when a logo exists", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", logo_url: "https://example.com/logo.png" },
       content: { title: "Worship Intensive" },
     });
     expect(prompt).not.toContain("OFFICIAL LOGO");
-    expect(prompt).toContain("horizontal strip completely blank across the FULL WIDTH");
-    expect(prompt).toContain("composited into this strip afterward");
-    expect(prompt).toContain("light, neutral, low-contrast backdrop");
+    expect(prompt).toContain("TOP-LEFT CORNER");
+    expect(prompt).toContain("composited into that corner afterward");
+    expect(prompt).toContain("light, neutral backdrop");
     expect(prompt).not.toContain("called KTM");
   });
 
@@ -61,7 +67,7 @@ describe("buildFullFlyerPrompt", () => {
       branding: { name: "KTM" },
       content: { title: "Worship Intensive" },
     });
-    expect(prompt).not.toContain("horizontal strip completely blank across the FULL WIDTH");
+    expect(prompt).not.toContain("TOP-LEFT CORNER");
     expect(prompt).toContain("called KTM");
   });
 
@@ -73,15 +79,25 @@ describe("buildFullFlyerPrompt", () => {
   // prompt must draw a hard, explicit line between the two: the event
   // title is required and must stay prominent; only the org's own name
   // is forbidden as separate lettering.
-  it("explicitly requires the event's own title to stay a prominent headline, distinct from the forbidden org-name lettering", () => {
+  it("explicitly exempts the event's own title from the forbidden org-name lettering", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", logo_url: "https://example.com/logo.png" },
       content: { title: "Pizza Party" },
     });
-    expect(prompt).toContain('The event title ("Pizza Party")');
-    expect(prompt).toContain("is REQUIRED");
-    expect(prompt).toContain("must still appear boldly");
+    expect(prompt).toContain("does NOT apply to the event's own title");
     expect(prompt).toContain('do not write out "KTM"');
+  });
+
+  // The other real regression this guards: the model invented nonsense
+  // filler text ("DAAEA88") nowhere in the actual event content, in a
+  // real generation. The prompt must explicitly forbid inventing ANY
+  // extra text, not just event-detail-specific facts.
+  it("forbids inventing any extra text, codes, or labels beyond the specified content", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM" },
+      content: { title: "Pizza Party" },
+    });
+    expect(prompt).toContain("no invented promo codes, taglines, hashtags, extra labels, or filler numbers");
   });
 
   it("tells the model not to leave large empty dead space", () => {
@@ -316,10 +332,10 @@ describe("generateAiFlyer", () => {
     // backing panel behind the logo, mirroring overlayQr's existing
     // pattern, so coverage is guaranteed regardless of what the model
     // actually drew underneath — not dependent on prompt compliance.
-    it("fully covers whatever the model drew in the logo area, even when it ignored the blank-space instruction", async () => {
+    it("fully covers whatever the model drew in the top-left corner, even when it ignored the blank-space instruction", async () => {
       // A base image that's NOT blank where the logo goes — busy content
-      // (a bright color, standing in for a title the model drew there
-      // anyway) fills the entire top-center region.
+      // (a bright color, standing in for something the model drew there
+      // anyway) fills the entire canvas, including the corner.
       const busyBase = await sharp({
         create: { width: 1080, height: 1350, channels: 4, background: { r: 10, g: 200, b: 10, alpha: 1 } },
       })
@@ -338,18 +354,17 @@ describe("generateAiFlyer", () => {
         content: { title: "Worship Intensive" },
       });
 
-      // Sample a pixel from the center of where the logo panel lands —
-      // it must be the panel's own opaque backing/logo color, not any
-      // trace of the busy green the model "drew" underneath.
+      // Sample a pixel from inside where the logo badge lands (top-left
+      // corner) — it must be the badge's own opaque backing/logo color,
+      // not any trace of the busy green the model "drew" underneath.
       const { data, info } = await sharp(result.png).raw().toBuffer({ resolveWithObject: true });
-      const logoWidth = Math.round(1080 * 0.34);
-      const topMargin = Math.round(1350 * 0.045);
-      const sampleX = 540; // horizontal center, where the panel is centered
-      const sampleY = topMargin + 10; // just inside the panel's top edge
+      const margin = Math.round(1080 * 0.05);
+      const sampleX = margin + 10;
+      const sampleY = margin + 10;
       const idx = (sampleY * info.width + sampleX) * info.channels;
       const [r, g, b] = [data[idx], data[idx + 1], data[idx + 2]];
       // The busy "model drew here anyway" stand-in is a distinct
-      // (10, 200, 10) green — the panel (white backing or the red logo
+      // (10, 200, 10) green — the badge (white backing or the red logo
       // itself) must not match it at all, proving full coverage.
       const matchesBusyBackground = r < 30 && g > 180 && b < 30;
       expect(matchesBusyBackground).toBe(false);
