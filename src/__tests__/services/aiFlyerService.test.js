@@ -51,7 +51,7 @@ describe("buildFullFlyerPrompt", () => {
     });
     expect(prompt).not.toContain("OFFICIAL LOGO");
     expect(prompt).toContain("horizontal strip completely blank across the FULL WIDTH");
-    expect(prompt).toContain("composited there afterward");
+    expect(prompt).toContain("composited into this strip afterward");
     expect(prompt).toContain("light, neutral, low-contrast backdrop");
     expect(prompt).not.toContain("called KTM");
   });
@@ -63,6 +63,25 @@ describe("buildFullFlyerPrompt", () => {
     });
     expect(prompt).not.toContain("horizontal strip completely blank across the FULL WIDTH");
     expect(prompt).toContain("called KTM");
+  });
+
+  // The real regression this guards: reserving space for the logo and
+  // forbidding the ORG name caused the model to drop the EVENT's own
+  // title entirely in a real generation — it read "don't letter the
+  // organization's name up top" as "don't put a big headline up top,"
+  // silently dropping "Pizza Party" from the flyer altogether. The
+  // prompt must draw a hard, explicit line between the two: the event
+  // title is required and must stay prominent; only the org's own name
+  // is forbidden as separate lettering.
+  it("explicitly requires the event's own title to stay a prominent headline, distinct from the forbidden org-name lettering", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", logo_url: "https://example.com/logo.png" },
+      content: { title: "Pizza Party" },
+    });
+    expect(prompt).toContain('The event title ("Pizza Party")');
+    expect(prompt).toContain("is REQUIRED");
+    expect(prompt).toContain("must still appear boldly");
+    expect(prompt).toContain('do not write out "KTM"');
   });
 
   it("tells the model not to leave large empty dead space", () => {
