@@ -267,7 +267,12 @@ const overlayLogo = async (pngBuffer, logoUrl, { backingColorHex = "#ffffff" } =
   const padY = Math.round(logoHeight * 0.15);
   // Extra room below the logo's own opaque area for the gradient to fade
   // through, rather than the fade eating into the logo's padding itself.
-  const fadeZone = Math.round(logoHeight * 0.6);
+  // Short on purpose — a wide fade zone reads as a washed-out ghost over
+  // whatever the model drew right below the strip (typically the title,
+  // per the prompt's "must appear directly below this strip" instruction),
+  // rather than either clearly hidden or clearly visible. A quick fade
+  // finishes before reaching content that's actually meant to be seen.
+  const fadeZone = Math.round(logoHeight * 0.18);
   const opaqueHeight = logoHeight + padY * 2;
   const bandHeight = opaqueHeight + fadeZone;
   const opaqueFraction = Math.round((opaqueHeight / bandHeight) * 100);
