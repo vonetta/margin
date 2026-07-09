@@ -157,6 +157,7 @@ router.post(
         caption: result.done ? result.caption : undefined,
         event: result.done ? result.event : undefined,
         style: result.done ? result.style : undefined,
+        tone: result.done ? result.tone : undefined,
         message: result.done || result.switchTo ? undefined : result.message,
         switchTo: result.switchTo || undefined,
         messages: [...messages, { role: "assistant", content: replyContent }],

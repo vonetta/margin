@@ -1,5 +1,6 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const { STYLE_SCHEMA, validateStyle } = require("./layouts/styleSchema");
+const { resolveTone } = require("./typographyService");
 
 // Build the finalize_caption tool's `style` property schema straight from
 // STYLE_SCHEMA so the two never drift apart — the AI's proposed values get
@@ -211,6 +212,11 @@ const FINALIZE_TOOL = {
           "Optional sizing/visibility hints for the matching flyer, based on how much content there actually is — e.g. a long title should get a smaller title_size, a rich description should get description_visible: true, a one-line title with nothing else can afford a larger title_size. Every value gets clamped to a safe range server-side regardless of what you pick, so use your judgment rather than always picking the same numbers. Omit entirely if you're not confident a particular value helps — the defaults are reasonable.",
         properties: styleToolProperties,
       },
+      tone: {
+        type: "string",
+        description:
+          "One word naming the emotional register of THIS specific piece of content, based on what's actually in the conversation — e.g. warm, energetic, formal, playful, casual, classic. Not restricted to a fixed list; describe what you actually see, even if it's a casual event (a pizza night, a game night) for a ministry whose usual content skews formal. Server-side, this gets matched to the closest category this ministry already uses — it never overrides their branding outright. Omit if there's no clear tone signal yet.",
+      },
     },
     required: ["caption"],
   },
@@ -314,6 +320,7 @@ const chatTurn = async ({
       caption: toolUse.input.caption,
       event: toolUse.input.event || null,
       style: validateStyle(toolUse.input.style),
+      tone: resolveTone(toolUse.input.tone, profile?.type_system?.tone_keywords),
     };
   }
 

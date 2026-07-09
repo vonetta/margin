@@ -60,20 +60,29 @@ const buildLiteralPrompt = (ministry, topicHint) => {
 // without the risk a full photoreal scene carries (fake faces, unreliable
 // text), since this stays strictly abstract/atmospheric by prompt design.
 const selectBackground = async ({ ministryId, layout, tone, topicHint }) => {
-  // 1. Try the library — prefer a tone match, else most recent
   const filter = { ministry_id: ministryId };
-  let background = null;
 
   if (tone) {
-    background = await Background.findOne({ ...filter, tone }).sort({
-      created_at: -1,
-    });
-  }
-  if (!background) {
-    background = await Background.findOne(filter).sort({ created_at: -1 });
-  }
-  if (background) {
-    return { url: background.url, id: background._id, generated: false };
+    // A specific tone was resolved — only reuse a background tagged with
+    // that same tone. Falling through to "most recent, any tone" here
+    // would let a resolved tone (e.g. "casual") silently inherit whatever
+    // backdrop a prior, unrelated-tone flyer happened to generate (a
+    // pizza night getting a somber conference's moody gradient, or worse,
+    // the reverse) — the exact bug this exists to prevent. If nothing
+    // matches, fall through to generating a fresh one below instead.
+    const toneMatch = await Background.findOne({ ...filter, tone }).sort({ created_at: -1 });
+    if (toneMatch) {
+      return { url: toneMatch.url, id: toneMatch._id, generated: false };
+    }
+  } else {
+    // No tone signal at all (new ministry, or the event's text didn't
+    // resolve to any of the ministry's own tone categories) — there's no
+    // better basis to pick on, so reusing whatever's most recent is a
+    // reasonable default, same as before.
+    const anyMatch = await Background.findOne(filter).sort({ created_at: -1 });
+    if (anyMatch) {
+      return { url: anyMatch.url, id: anyMatch._id, generated: false };
+    }
   }
 
   // 2. Nothing in the library — generate one, store it, and reuse it for

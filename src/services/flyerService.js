@@ -21,6 +21,12 @@ const generateFlyer = async ({
   ministryId = null, // needed for auto background selection
   autoBackground = true, // off for tests / when caller supplies a bg
   style = null,
+  // An AI-proposed tone, already clamped to one of this ministry's own
+  // tone_keywords categories via typographyService.resolveTone (the
+  // chat-drafted flyer path only — see routes/content.js). Undefined on
+  // the manual-entry path, where keyword inference runs exactly as it
+  // did before this existed.
+  resolvedTone,
 }) => {
   const tone = content.event_type || content.title || "";
   const chosenLayout =
@@ -29,7 +35,7 @@ const generateFlyer = async ({
   const toneSource = [content.title, content.subtitle, content.event_type]
     .filter(Boolean)
     .join(" ");
-  const typography = selectTypography(typeSystem, toneSource);
+  const typography = selectTypography(typeSystem, toneSource, resolvedTone);
   const fontsUrl = typeSystem?.fonts
     ? buildGoogleFontsUrl(typeSystem.fonts)
     : null;

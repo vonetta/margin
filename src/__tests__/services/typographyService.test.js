@@ -1,6 +1,7 @@
 const {
   selectTypography,
   inferTone,
+  resolveTone,
 } = require("../../services/typographyService");
 const { buildGoogleFontsUrl } = require("../../services/fontLoader");
 
@@ -84,6 +85,69 @@ describe("inferTone", () => {
   it("returns null when no keywords are provided", () => {
     expect(inferTone("Ordination Intensive")).toBeNull();
   });
+
+  // The Pizza Night bug: a ministry's own tone_keywords vocab skews
+  // formal (no ministry ever thinks to type "pizza" during onboarding),
+  // so casual event copy matched nothing and silently fell back to the
+  // formal default look. The keyword-matching pass is now merged with a
+  // built-in baseline that extends whichever of the ministry's OWN
+  // category names also appears in that baseline — never inventing a
+  // category the ministry doesn't already have.
+  it("infers energetic for a casual pizza night, via the merged default vocabulary", () => {
+    expect(inferTone("Pizza Night", ktmTypeSystem.tone_keywords)).toBe("energetic");
+  });
+
+  it("still returns null for text that matches nothing, even with the merged defaults", () => {
+    expect(
+      inferTone("Some generic event text", ktmTypeSystem.tone_keywords),
+    ).toBeNull();
+  });
+
+  it("never introduces a tone category the ministry hasn't defined itself", () => {
+    // "casual"/"playful"/"fun" are default-vocab bucket names, but this
+    // ministry only defines formal/warm/energetic — the merge must never
+    // surface a category name they never typed in.
+    const tone = inferTone("Pizza Night board game trivia", ktmTypeSystem.tone_keywords);
+    expect(["formal", "warm", "energetic"]).toContain(tone);
+  });
+});
+
+describe("resolveTone", () => {
+  it("exact-matches the AI's proposal against a ministry's own category name", () => {
+    expect(resolveTone("warm", ktmTypeSystem.tone_keywords)).toBe("warm");
+  });
+
+  it("is case-insensitive", () => {
+    expect(resolveTone("WARM", ktmTypeSystem.tone_keywords)).toBe("warm");
+  });
+
+  it("maps a synonym to a ministry-defined equivalent category, rather than returning null", () => {
+    // The ministry has no "playful" category itself, but "playful" is a
+    // known synonym of both "warm" and "energetic", which it does have —
+    // among its own matching categories, the first one it defined wins
+    // (formal, then warm, then energetic — warm comes first here).
+    expect(resolveTone("playful", ktmTypeSystem.tone_keywords)).toBe("warm");
+  });
+
+  it("prefers whichever of the ministry's own matching categories was defined first", () => {
+    const reordered = { energetic: ["youth"], warm: ["retreat"] };
+    expect(resolveTone("playful", reordered)).toBe("energetic");
+  });
+
+  it("returns null when nothing reasonably matches, rather than guessing", () => {
+    expect(resolveTone("melancholy", ktmTypeSystem.tone_keywords)).toBeNull();
+  });
+
+  it("returns null for empty/missing input", () => {
+    expect(resolveTone("", ktmTypeSystem.tone_keywords)).toBeNull();
+    expect(resolveTone(null, ktmTypeSystem.tone_keywords)).toBeNull();
+    expect(resolveTone(undefined, ktmTypeSystem.tone_keywords)).toBeNull();
+  });
+
+  it("returns null when the ministry has no tone_keywords at all", () => {
+    expect(resolveTone("warm", {})).toBeNull();
+    expect(resolveTone("warm", undefined)).toBeNull();
+  });
 });
 
 describe("selectTypography", () => {
@@ -115,6 +179,25 @@ describe("selectTypography", () => {
     const result = selectTypography(null, "Any event");
     expect(result.display.name).toBe("Georgia");
     expect(result.body.name).toBe("Helvetica");
+  });
+
+  it("selects an energetic look for Pizza Night via the merged default vocabulary", () => {
+    const result = selectTypography(ktmTypeSystem, "Pizza Night");
+    expect(result.tone).toBe("energetic");
+    expect(result.display.name).toBe("Montserrat");
+  });
+
+  it("uses resolvedTone as-is when provided, skipping keyword inference entirely", () => {
+    // Text says "Ordination" (would keyword-infer "formal"), but an
+    // explicitly resolved tone always wins — one source of truth per call.
+    const result = selectTypography(ktmTypeSystem, "Ordination Intensive", "energetic");
+    expect(result.tone).toBe("energetic");
+    expect(result.display.name).toBe("Montserrat");
+  });
+
+  it("treats a resolvedTone of null as explicitly no tone, not 'run inference'", () => {
+    const result = selectTypography(ktmTypeSystem, "Ordination Intensive", null);
+    expect(result.tone).toBeNull();
   });
 });
 

@@ -89,7 +89,10 @@ describe("selectBackground", () => {
     expect(result.id).toBeNull();
   });
 
-  it("falls back to any background when no tone match exists", async () => {
+  it("generates a fresh background rather than borrowing an unrelated tone's, when a tone was resolved", async () => {
+    // A formal-conference backdrop must never get inherited by a
+    // "casual"-toned flyer just because it's the most recent thing in
+    // the library — that's the exact bug a Pizza Night flyer hit.
     await Background.create({
       ministry_id: "ktm-test",
       prompt: "p",
@@ -102,6 +105,27 @@ describe("selectBackground", () => {
       ministryId: "ktm-test",
       layout: "monument",
       tone: "formal",
+    });
+    expect(result.generated).toBe(true);
+    expect(result.url).not.toBe("https://any.r2.dev/bg.png");
+
+    const stored = await Background.findById(result.id);
+    expect(stored.tone).toBe("formal");
+  });
+
+  it("falls back to the most recent background only when no tone signal exists at all", async () => {
+    await Background.create({
+      ministry_id: "ktm-test",
+      prompt: "p",
+      url: "https://any.r2.dev/bg.png",
+      key: "k",
+      tone: "warm",
+    });
+
+    const result = await selectBackground({
+      ministryId: "ktm-test",
+      layout: "monument",
+      tone: null,
     });
     expect(result.generated).toBe(false);
     expect(result.url).toBe("https://any.r2.dev/bg.png");

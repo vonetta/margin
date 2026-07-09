@@ -11,6 +11,7 @@ const { generateFlyer } = require("../services/flyerService");
 const { uploadFile, safeDeleteFile } = require("../services/storageService");
 const { listLayouts, suggestLayout } = require("../services/layouts");
 const { validateStyle } = require("../services/layouts/styleSchema");
+const { resolveTone, inferTone } = require("../services/typographyService");
 const {
   buildLiteralPrompt,
 } = require("../services/backgroundSelector");
@@ -36,6 +37,28 @@ const validate = (req, res, next) => {
 // GET /api/flyers/layouts — the gallery of available layouts + metadata
 router.get("/layouts", (req, res) => {
   res.json(listLayouts());
+});
+
+// POST /api/flyers/infer-tone — the manual-entry wizard's equivalent of
+// the chat's AI-proposed tone, but genuinely free: keyword inference
+// against this ministry's own tone_keywords (no AI call, no aiLimiter).
+// Returns the ministry's own category names as `options` (so the wizard's
+// dropdown is always self-consistent with what actually drives font/
+// background selection) plus a suggested pre-fill. Read-only, no role
+// gate — same posture as tasks' GET /similar duplicate-check.
+router.post("/infer-tone", async (req, res) => {
+  try {
+    const { title = "", subtitle = "", description = "" } = req.body || {};
+    const aiProfile = await AiProfile.findOne({ ministry_id: req.ministryId });
+    const toneKeywords = aiProfile?.type_system?.tone_keywords || {};
+    const options =
+      toneKeywords instanceof Map ? Array.from(toneKeywords.keys()) : Object.keys(toneKeywords);
+    const eventText = [title, subtitle, description].filter(Boolean).join(" ");
+    const tone = eventText.trim() ? inferTone(eventText, toneKeywords) : null;
+    res.json({ tone, options });
+  } catch (error) {
+    res.status(500).json({ error: "Could not infer a tone" });
+  }
 });
 
 // POST /api/flyers/background-preview — generate one candidate literal
@@ -116,6 +139,7 @@ router.post(
     body("platform").optional().trim(),
     body("background_url").optional().trim(),
     body("engine").optional().isIn(["template", "ai"]).withMessage("Invalid engine"),
+    body("tone").optional().trim(),
   ],
   validate,
   async (req, res) => {
@@ -146,6 +170,7 @@ router.post(
         platform,
         background_url,
         engine = "template",
+        tone,
       } = req.body;
 
       // Always clamped to safe ranges regardless of where it came from —
@@ -159,6 +184,17 @@ router.post(
         ministry_id: req.ministryId,
       });
       const typeSystem = aiProfile?.type_system || null;
+
+      // Re-clamped here regardless of where `tone` came from (the chat
+      // step already resolved it once, but the ministry's own categories
+      // could have changed since, or this could be a raw API call) —
+      // resolveTone can never return anything the ministry hasn't
+      // actually defined. Undefined when no tone was sent at all, so
+      // generateFlyer falls through to its normal keyword inference —
+      // distinct from `null`, which would mean "AI looked and found no
+      // match, don't infer further."
+      const resolvedTone =
+        tone !== undefined ? resolveTone(tone, typeSystem?.tone_keywords) : undefined;
 
       // Resolve people from the roster
       let host = null;
@@ -199,6 +235,7 @@ router.post(
         speakers,
         layout: layout || null,
         style,
+        resolvedTone,
         ministryId: req.ministryId,
         platform: platform || null,
         backgroundUrl: background_url || null,

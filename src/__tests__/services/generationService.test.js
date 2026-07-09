@@ -86,6 +86,7 @@ describe("chatTurn", () => {
       caption: "Final caption text",
       event: null,
       style: defaultStyle(),
+      tone: null,
     });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -122,6 +123,7 @@ describe("chatTurn", () => {
       caption: "Final caption text",
       event: { title: "Worship Workshop", date: "July 20" },
       style: defaultStyle(),
+      tone: null,
     });
   });
 

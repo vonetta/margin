@@ -33,6 +33,7 @@ const User = require("../../models/User");
 const Background = require("../../models/Background");
 const Event = require("../../models/Event");
 const Notification = require("../../models/Notification");
+const AiProfile = require("../../models/AiProfile");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -54,6 +55,7 @@ afterAll(async () => {
   await Background.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
   await Notification.deleteMany({ ministry_id: "ktm-test" });
+  await AiProfile.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -66,6 +68,7 @@ beforeEach(async () => {
   await Background.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
   await Notification.deleteMany({ ministry_id: "ktm-test" });
+  await AiProfile.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["flyer-admin@ktm.com", "flyer-team@ktm.com"] },
   });
@@ -138,6 +141,56 @@ describe("POST /api/flyers/generate", () => {
     expect(res.body.content.description).toBe("Step into the supernatural.");
     expect(res.body.content.theme_tags).toEqual(["Teaching", "Impartation"]);
     expect(res.body.content.audience).toBe("Leaders and prophetic voices");
+  });
+
+  it("passes a tone through as resolvedTone when it matches one of the ministry's own categories", async () => {
+    await AiProfile.create({
+      ministry_id: "ktm-test",
+      type_system: { tone_keywords: { formal: ["conference"], energetic: ["night"] } },
+    });
+    mockGenerateFlyer.mockClear();
+
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Night", tone: "energetic" });
+
+    expect(res.status).toBe(201);
+    const callArgs = mockGenerateFlyer.mock.calls[0][0];
+    expect(callArgs.resolvedTone).toBe("energetic");
+  });
+
+  it("clamps an unrecognized tone to undefined-turned-null, never inventing a category", async () => {
+    await AiProfile.create({
+      ministry_id: "ktm-test",
+      type_system: { tone_keywords: { formal: ["conference"] } },
+    });
+    mockGenerateFlyer.mockClear();
+
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Night", tone: "some-made-up-tone" });
+
+    expect(res.status).toBe(201);
+    const callArgs = mockGenerateFlyer.mock.calls[0][0];
+    expect(callArgs.resolvedTone).toBeNull();
+  });
+
+  it("omits resolvedTone entirely when no tone was sent, so keyword inference still runs", async () => {
+    mockGenerateFlyer.mockClear();
+
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Night" });
+
+    expect(res.status).toBe(201);
+    const callArgs = mockGenerateFlyer.mock.calls[0][0];
+    expect(callArgs.resolvedTone).toBeUndefined();
   });
 
   it("auto-creates a pending calendar event when the date parses", async () => {
@@ -254,6 +307,66 @@ describe("POST /api/flyers/generate", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ date: "June 12" });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/flyers/infer-tone", () => {
+  it("suggests a tone plus the ministry's own category options, with no AI call", async () => {
+    await AiProfile.create({
+      ministry_id: "ktm-test",
+      type_system: {
+        tone_keywords: { formal: ["conference"], energetic: ["youth", "night"] },
+      },
+    });
+
+    const res = await request(app)
+      .post("/api/flyers/infer-tone")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Night" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tone).toBe("energetic");
+    expect(res.body.options.sort()).toEqual(["energetic", "formal"]);
+    expect(mockGenerateBackground).not.toHaveBeenCalled();
+  });
+
+  it("returns options with a null tone when nothing matches", async () => {
+    await AiProfile.create({
+      ministry_id: "ktm-test",
+      type_system: { tone_keywords: { formal: ["conference"] } },
+    });
+
+    const res = await request(app)
+      .post("/api/flyers/infer-tone")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Just a regular gathering" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tone).toBeNull();
+    expect(res.body.options).toEqual(["formal"]);
+  });
+
+  it("returns empty options for a ministry with no type system yet", async () => {
+    const res = await request(app)
+      .post("/api/flyers/infer-tone")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Anything" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tone).toBeNull();
+    expect(res.body.options).toEqual([]);
+  });
+
+  it("is available to a team member (read-only, no role gate)", async () => {
+    const res = await request(app)
+      .post("/api/flyers/infer-tone")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({ title: "Anything" });
+    expect(res.status).toBe(200);
   });
 });
 
