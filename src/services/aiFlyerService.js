@@ -238,10 +238,19 @@ const overlayQr = async (pngBuffer, qrUrl, { darkColor } = {}) => {
 // to span the FULL WIDTH of the canvas, not just the logo's width, so
 // nothing the model drew in that horizontal strip can bleed through on
 // either side — exactly like overlayQr below never lets anything show
-// through its backing square. Best-effort: a failed logo fetch just
-// skips the overlay rather than failing the whole flyer, matching
-// fetchImageReference's posture elsewhere in this file.
-const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
+// through its backing square.
+//
+// A solid-color rectangular band reads as an obvious pasted-on bar
+// against most real generations, though, so its bottom edge fades to
+// fully transparent via a gradient instead of cutting off sharply — the
+// coverage guarantee that actually matters (directly behind and around
+// the logo itself, where collisions happen) stays fully opaque; only the
+// mostly-empty lower portion of the band, below the logo, blends away.
+//
+// Best-effort: a failed logo fetch just skips the overlay rather than
+// failing the whole flyer, matching fetchImageReference's posture
+// elsewhere in this file.
+const overlayLogo = async (pngBuffer, logoUrl, { backingColorHex = "#ffffff" } = {}) => {
   const logo = await fetchImageReference(logoUrl);
   if (!logo) return pngBuffer;
 
@@ -256,16 +265,25 @@ const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
   const { height: logoHeight } = await sharp(resizedLogo).metadata();
 
   const padY = Math.round(logoHeight * 0.15);
-  const bandHeight = logoHeight + padY * 2;
+  // Extra room below the logo's own opaque area for the gradient to fade
+  // through, rather than the fade eating into the logo's padding itself.
+  const fadeZone = Math.round(logoHeight * 0.6);
+  const opaqueHeight = logoHeight + padY * 2;
+  const bandHeight = opaqueHeight + fadeZone;
+  const opaqueFraction = Math.round((opaqueHeight / bandHeight) * 100);
 
-  const band = await sharp({
-    create: {
-      width: canvasWidth,
-      height: bandHeight,
-      channels: 4,
-      background: backingColor || { r: 255, g: 255, b: 255, alpha: 1 },
-    },
-  })
+  const bandSvg = `<svg width="${canvasWidth}" height="${bandHeight}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${backingColorHex}" stop-opacity="1"/>
+        <stop offset="${opaqueFraction}%" stop-color="${backingColorHex}" stop-opacity="1"/>
+        <stop offset="100%" stop-color="${backingColorHex}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#fade)"/>
+  </svg>`;
+
+  const band = await sharp(Buffer.from(bandSvg))
     .composite([{ input: resizedLogo, top: padY, left: Math.round((canvasWidth - logoWidth) / 2) }])
     .png()
     .toBuffer();
