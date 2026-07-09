@@ -108,11 +108,17 @@ const LOGO_AREA = {
   // A rough estimate of how tall the composited band ends up (logo
   // height + padding, as a fraction of canvas height) — used only to
   // tell the model approximately how much vertical space to leave clear.
-  // The actual band height is computed exactly from the logo's real
-  // aspect ratio at composite time in overlayLogo; this is just guidance
-  // for a prompt that the model isn't guaranteed to follow precisely
-  // anyway (the composite itself is what guarantees no collision).
-  estimatedHeightRatio: 0.21,
+  // MUST stay >= the real footprint computed in overlayLogo (currently
+  // ~0.23 for a roughly-square logo, at widthRatio 0.22 with the padY/
+  // fadeZone below) — a prior version of this number (0.21) understated
+  // the real band by several points, so the model placed the title
+  // expecting less coverage than the band actually had, and the title
+  // ended up partially hidden underneath it. Deliberately padded a bit
+  // above the computed value as a safety margin, since a taller logo
+  // (a wide horizontal lockup vs. a stacked square mark) isn't known
+  // until the real file is fetched at composite time — better to ask
+  // the model to over-clear than under-clear.
+  estimatedHeightRatio: 0.27,
 };
 
 const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null }) => {
@@ -264,7 +270,7 @@ const overlayLogo = async (pngBuffer, logoUrl, { backingColorHex = "#ffffff" } =
     .toBuffer();
   const { height: logoHeight } = await sharp(resizedLogo).metadata();
 
-  const padY = Math.round(logoHeight * 0.15);
+  const padY = Math.round(logoHeight * 0.1);
   // Extra room below the logo's own opaque area for the gradient to fade
   // through, rather than the fade eating into the logo's padding itself.
   // Short on purpose — a wide fade zone reads as a washed-out ghost over
@@ -272,7 +278,7 @@ const overlayLogo = async (pngBuffer, logoUrl, { backingColorHex = "#ffffff" } =
   // per the prompt's "must appear directly below this strip" instruction),
   // rather than either clearly hidden or clearly visible. A quick fade
   // finishes before reaching content that's actually meant to be seen.
-  const fadeZone = Math.round(logoHeight * 0.18);
+  const fadeZone = Math.round(logoHeight * 0.12);
   const opaqueHeight = logoHeight + padY * 2;
   const bandHeight = opaqueHeight + fadeZone;
   const opaqueFraction = Math.round((opaqueHeight / bandHeight) * 100);
