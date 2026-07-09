@@ -33,6 +33,7 @@ const render = ({
   const { s, primary, accent, gold, display, body, accentFont } =
     resolveStyledTheme(branding, typography, style);
 
+  const kicker = escapeHtml(content.kicker || "");
   const title = escapeHtml(content.title || "");
   const subtitle = escapeHtml(content.subtitle || "");
   const description = escapeHtml(content.description || "");
@@ -43,6 +44,8 @@ const render = ({
   const dateLine = escapeHtml(content.date || "");
   const location = escapeHtml(content.location || "");
   const cost = escapeHtml(content.cost || "");
+  const rsvpBy = escapeHtml(content.rsvp_by || "");
+  const contact = escapeHtml(content.contact || "");
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
 
@@ -74,6 +77,7 @@ const render = ({
     location && { label: "Where", value: location },
     cost && { label: "Cost", value: cost },
     audience && { label: "For", value: audience },
+    rsvpBy && { label: "RSVP By", value: rsvpBy },
   ].filter(Boolean);
 
   const pills = metaItems
@@ -111,6 +115,7 @@ const render = ({
     .wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 50px 60px 0; ${hasPeople ? "" : "justify-content: center;"} }
     .top-bar { margin-bottom: 18px; }
     .top-bar-center { text-align: center; }
+    .kicker { text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: ${gold}; text-shadow: 0 2px 10px rgba(0,0,0,0.6); margin-bottom: 8px; }
     .title { font-family: '${display}', serif; font-weight: 700; font-size: ${s.title_size}px; color: #fff; text-align: center; line-height: 1; text-shadow: 0 4px 30px rgba(0,0,0,0.55); }
     .subtitle { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${gold}; text-align: center; margin-top: 4px; text-shadow: 0 2px 12px rgba(0,0,0,0.4); }
     .tag-row { margin-top: 18px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
@@ -135,6 +140,7 @@ const render = ({
     ${footerLogoNeedsInvert ? ".footer-logo .logo { filter: brightness(0) invert(1); }" : ""}
     .footer-left { display: flex; align-items: center; gap: 16px; }
     .cta { font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.85)}px; font-weight: 700; color: ${gold}; text-transform: uppercase; }
+    .contact { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 4px; }
     .qr-img { width: 130px; height: 130px; background: #fff; padding: 8px; border-radius: 8px; }
     .qr-caption { font-size: 15px; color: rgba(255,255,255,0.85); text-align: center; margin-top: 6px; }
     .photo-corner-logo { position: absolute; top: 20px; right: 20px; z-index: 4; }
@@ -150,6 +156,7 @@ const render = ({
         ? `<div class="top-bar${s.logo_placement === "top-center" ? " top-bar-center" : ""}">${logo}</div>`
         : ""
     }
+    ${kicker ? `<div class="kicker">${kicker}</div>` : ""}
     <div class="title">${title}</div>
     ${subtitle ? `<div class="subtitle">${subtitle}</div>` : ""}
     ${tagPills}
@@ -161,7 +168,7 @@ const render = ({
   <div class="footer">
     <div class="footer-left">
       ${logoInFooter && logo ? `<div class="footer-logo">${logo}</div>` : ""}
-      ${cta ? `<div class="cta">${cta}</div>` : "<div></div>"}
+      ${cta || contact ? `<div>${cta ? `<div class="cta">${cta}</div>` : ""}${contact ? `<div class="contact">${contact}</div>` : ""}</div>` : "<div></div>"}
     </div>
     ${qrDataUrl ? `<div><img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">${qrCaption}</div></div>` : ""}
   </div>

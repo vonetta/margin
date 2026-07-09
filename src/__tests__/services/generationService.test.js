@@ -127,6 +127,37 @@ describe("chatTurn", () => {
     });
   });
 
+  it("passes through kicker, rsvp_by, and contact when the model provides them", async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        {
+          type: "tool_use",
+          name: "finalize_caption",
+          input: {
+            caption: "Final caption text",
+            event: {
+              title: "Worship Workshop",
+              kicker: "Renewed — Week 3",
+              rsvp_by: "July 8",
+              contact: "Questions? Text Sarah at 555-1234",
+            },
+          },
+        },
+      ],
+    });
+
+    const result = await chatTurn({
+      profile,
+      ministry,
+      platform: "Instagram",
+      messages: [{ role: "user", content: "Worship Workshop" }],
+    });
+
+    expect(result.event.kicker).toBe("Renewed — Week 3");
+    expect(result.event.rsvp_by).toBe("July 8");
+    expect(result.event.contact).toBe("Questions? Text Sarah at 555-1234");
+  });
+
   it("includes a validated style object when the model proposes one", async () => {
     mockCreate.mockResolvedValue({
       content: [

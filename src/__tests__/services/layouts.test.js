@@ -129,6 +129,33 @@ describe("suggestLayout", () => {
     expect(html).toContain("Leaders and prophetic voices");
   });
 
+  it("renders kicker and rsvp_by across every layout (promoted from feature.js-only to all five)", () => {
+    const props = {
+      content: {
+        title: "Test Event",
+        kicker: "Renewed — Week 3",
+        rsvp_by: "July 8",
+      },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F", accent: "#EA8A8B" } },
+    };
+    for (const id of ["monument", "feature", "canvas", "showcase", "collage"]) {
+      const html = renderLayout(id, props);
+      expect(html).toContain("Renewed — Week 3");
+      expect(html).toContain("July 8");
+    }
+  });
+
+  it("renders contact as small print near the CTA (all layouts except collage, which has no CTA slot at all)", () => {
+    const props = {
+      content: { title: "Test Event", cta: "Register now", contact: "Questions? Text Sarah at 555-1234" },
+      branding: { colors: { primary: "#03293F", gold: "#DAAE4F", accent: "#EA8A8B" } },
+    };
+    for (const id of ["monument", "feature", "canvas", "showcase"]) {
+      const html = renderLayout(id, props);
+      expect(html).toContain("Questions? Text Sarah at 555-1234");
+    }
+  });
+
   it("renders highlights when provided", () => {
     const html = renderLayout("monument", {
       content: {

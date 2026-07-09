@@ -31,6 +31,7 @@ const render = ({
   const { s, primary, accent, gold, display, body, accentFont } =
     resolveStyledTheme(branding, typography, style);
 
+  const kicker = escapeHtml(content.kicker || "");
   const title = escapeHtml(content.title || "");
   const subtitle = escapeHtml(content.subtitle || "");
   const description = escapeHtml(content.description || "");
@@ -42,6 +43,8 @@ const render = ({
   const location = escapeHtml(content.location || "");
   const cost = escapeHtml(content.cost || "");
   const cta = escapeHtml(content.cta || "");
+  const rsvpBy = escapeHtml(content.rsvp_by || "");
+  const contact = escapeHtml(content.contact || "");
   const footerNote = escapeHtml(content.footer_note || "");
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
@@ -81,6 +84,7 @@ const render = ({
     .logo-backing-pill { background: #fff; border-radius: 999px; padding: 8px 18px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
     .topbar { position: absolute; top: 0; left: 0; right: 0; padding: 48px 64px; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
     .topbar-text { flex: 1; }
+    .kicker { font-size: 15px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: ${gold}; text-shadow: 0 2px 10px rgba(0,0,0,0.6); margin-bottom: 6px; }
     .title { font-family: '${display}', serif; font-weight: 700; font-size: ${s.title_size}px; color: #fff; text-shadow: 0 3px 20px rgba(0,0,0,0.6); line-height: 1.02; }
     .subtitle { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${gold}; text-shadow: 0 2px 12px rgba(0,0,0,0.6); margin-top: 4px; }
     .tag-row { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; }
@@ -99,6 +103,7 @@ const render = ({
     .botbar { position: absolute; bottom: 0; left: 0; right: 0; background: ${primary}; border-top: 4px solid ${gold}; padding: 30px 64px; z-index: 3; display: flex; align-items: center; justify-content: center; gap: 20px; }
     ${footerLogoNeedsInvert ? ".botbar .logo { filter: brightness(0) invert(1); }" : ""}
     .botbar-note { font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.85)}px; font-weight: 700; color: ${gold}; text-transform: uppercase; text-align: center; }
+    .botbar-contact { font-size: 13px; color: rgba(255,255,255,0.75); text-align: center; margin-top: 4px; }
     .highlights { position: absolute; bottom: 110px; left: 0; right: 0; display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; padding: 0 64px; z-index: 3; }
     .highlight-item { display: flex; align-items: center; gap: 6px; font-size: 16px; color: #fff; font-weight: 600; text-shadow: 0 2px 10px rgba(0,0,0,0.6); }
     .highlight-mark { color: ${gold}; font-weight: 700; }
@@ -109,6 +114,7 @@ const render = ({
 <body>
   <div class="topbar">
     <div class="topbar-text">
+      ${kicker ? `<div class="kicker">${kicker}</div>` : ""}
       <div class="title">${title}</div>
       ${subtitle ? `<div class="subtitle">${subtitle}</div>` : ""}
       ${tagPills}
@@ -121,16 +127,16 @@ const render = ({
     ${dateLine ? `<div class="panel-date">${dateLine}</div>` : ""}
     ${location ? `<div class="panel-loc">${location}</div>` : ""}
     ${
-      cost || audience
-        ? `<div class="panel-meta">${cost ? `<div class="meta-item"><div class="meta-label">Cost</div><div class="meta-value">${cost}</div></div>` : ""}${audience ? `<div class="meta-item"><div class="meta-label">For</div><div class="meta-value">${audience}</div></div>` : ""}</div>`
+      cost || audience || rsvpBy
+        ? `<div class="panel-meta">${cost ? `<div class="meta-item"><div class="meta-label">Cost</div><div class="meta-value">${cost}</div></div>` : ""}${audience ? `<div class="meta-item"><div class="meta-label">For</div><div class="meta-value">${audience}</div></div>` : ""}${rsvpBy ? `<div class="meta-item"><div class="meta-label">RSVP By</div><div class="meta-value">${rsvpBy}</div></div>` : ""}</div>`
         : ""
     }
     ${qrDataUrl ? `<img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">${qrCaption}</div>` : ""}
   </div>
   ${highlightBlock}
   ${
-    footerNote || cta || logoInFooter
-      ? `<div class="botbar">${logoInFooter && logo ? logo : ""}<div class="botbar-note">${footerNote || cta}</div></div>`
+    footerNote || cta || logoInFooter || contact
+      ? `<div class="botbar">${logoInFooter && logo ? logo : ""}<div><div class="botbar-note">${footerNote || cta}</div>${contact ? `<div class="botbar-contact">${contact}</div>` : ""}</div></div>`
       : ""
   }
 </body></html>`;

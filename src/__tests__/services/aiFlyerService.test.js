@@ -27,6 +27,21 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("#DAAE4F");
   });
 
+  it("includes kicker, rsvp_by, and contact when provided", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: {
+        title: "Worship Intensive",
+        kicker: "Renewed — Week 3",
+        rsvp_by: "July 8",
+        contact: "Questions? Text Sarah at 555-1234",
+      },
+    });
+    expect(prompt).toContain('Eyebrow/series line (small text above the title): "Renewed — Week 3"');
+    expect(prompt).toContain('RSVP by: "July 8"');
+    expect(prompt).toContain('Contact (small print, e.g. near the footer): "Questions? Text Sarah at 555-1234"');
+  });
+
   it("mentions incorporating a reference photo when a host reference image is present", () => {
     const prompt = buildFullFlyerPrompt({
       branding: {},

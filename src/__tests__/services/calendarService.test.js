@@ -6,6 +6,8 @@ const {
   buildPublicCalendarFeed,
   nextOccurrenceAfter,
   formatFriendlyDate,
+  formatFriendlyTime,
+  formatFriendlyDateTime,
 } = require("../../services/calendarService");
 
 const makeEvent = (overrides = {}) => ({
@@ -185,5 +187,56 @@ describe("formatFriendlyDate", () => {
   it("passes through empty/nullish input unchanged", () => {
     expect(formatFriendlyDate("")).toBe("");
     expect(formatFriendlyDate(undefined)).toBeUndefined();
+  });
+});
+
+describe("formatFriendlyTime", () => {
+  it("reformats a bare HH:MM (from the <input type=time> picker) into 12-hour time", () => {
+    expect(formatFriendlyTime("17:00")).toBe("5:00 PM");
+    expect(formatFriendlyTime("09:30")).toBe("9:30 AM");
+    expect(formatFriendlyTime("00:00")).toBe("12:00 AM");
+  });
+
+  it("leaves already-free-text times untouched", () => {
+    expect(formatFriendlyTime("around 5ish")).toBe("around 5ish");
+  });
+
+  it("passes through empty/nullish input unchanged", () => {
+    expect(formatFriendlyTime("")).toBe("");
+    expect(formatFriendlyTime(undefined)).toBeUndefined();
+  });
+});
+
+describe("formatFriendlyDateTime", () => {
+  it("combines a date with a single start time", () => {
+    expect(formatFriendlyDateTime("2026-07-11", "17:00")).toBe(
+      "Saturday, July 11, 2026, 5:00 PM",
+    );
+  });
+
+  it("combines a date with a start and end time sharing the same meridiem", () => {
+    expect(formatFriendlyDateTime("2026-07-11", "17:00", "19:00")).toBe(
+      "Saturday, July 11, 2026, 5:00 – 7:00 PM",
+    );
+  });
+
+  it("shows both meridiems when start and end cross AM/PM", () => {
+    expect(formatFriendlyDateTime("2026-07-11", "23:00", "01:00")).toBe(
+      "Saturday, July 11, 2026, 11:00 PM – 1:00 AM",
+    );
+  });
+
+  it("falls back to just the date when no time is given", () => {
+    expect(formatFriendlyDateTime("2026-07-11")).toBe("Saturday, July 11, 2026");
+  });
+
+  it("falls back to just the time when no date is given", () => {
+    expect(formatFriendlyDateTime(undefined, "17:00")).toBe("5:00 PM");
+  });
+
+  it("leaves an already-free-text date untouched even with a time provided", () => {
+    expect(formatFriendlyDateTime("Sunday, August 2", "18:00")).toBe(
+      "Sunday, August 2, 6:00 PM",
+    );
   });
 });

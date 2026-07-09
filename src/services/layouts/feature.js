@@ -44,6 +44,8 @@ const render = ({
   const location = escapeHtml(content.location || "");
   const cost = escapeHtml(content.cost || "");
   const audience = escapeHtml(content.audience || "");
+  const rsvpBy = escapeHtml(content.rsvp_by || "");
+  const contact = escapeHtml(content.contact || "");
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
 
@@ -67,6 +69,7 @@ const render = ({
     location && { label: "Where", value: location },
     cost && { label: "Cost", value: cost },
     audience && { label: "For", value: audience },
+    rsvpBy && { label: "RSVP By", value: rsvpBy },
   ].filter(Boolean);
 
   const pills = metaItems
@@ -120,6 +123,7 @@ const render = ({
     ${footerLogoNeedsInvert ? ".footer-logo .logo { filter: brightness(0) invert(1); }" : ""}
     .footer-logo { margin-bottom: 16px; }
     .cta { display: inline-block; font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.9)}px; font-weight: 700; color: ${gold}; text-transform: uppercase; margin-bottom: 16px; background: rgba(0,0,0,0.4); padding: 10px 18px; border-radius: 8px; }
+    .contact { font-size: 13px; color: rgba(255,255,255,0.75); margin-bottom: 10px; }
     .pills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 12px; max-width: 420px; }
     .pill { border: 2px solid; border-radius: 10px; padding: 7px 14px; }
     .pill-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -155,6 +159,7 @@ const render = ({
       <div class="footer-left">
         ${logoInFooter && logo ? `<div class="footer-logo">${logo}</div>` : ""}
         ${cta ? `<div class="cta">${cta}</div>` : ""}
+        ${contact ? `<div class="contact">${contact}</div>` : ""}
         <div class="pills">${pills}</div>
       </div>
       ${qrDataUrl ? `<div class="qr-slot"><img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">${qrCaption}</div></div>` : ""}

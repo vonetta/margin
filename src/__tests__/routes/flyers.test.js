@@ -151,6 +151,59 @@ describe("POST /api/flyers/generate", () => {
     expect(res.body.content.audience).toBe("Leaders and prophetic voices");
   });
 
+  it("saves kicker, rsvp_by, and contact on the flyer record", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Worship Intensive",
+        kicker: "Renewed — Week 3",
+        rsvp_by: "July 8",
+        contact: "Questions? Text Sarah at 555-1234",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.content.kicker).toBe("Renewed — Week 3");
+    expect(res.body.content.rsvp_by).toBe("July 8");
+    expect(res.body.content.contact).toBe("Questions? Text Sarah at 555-1234");
+  });
+
+  it("combines date and start/end time into one friendly display string", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Worship Intensive",
+        date: "2026-07-11",
+        time: "17:00",
+        end_time: "19:00",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.content.date).toBe("Saturday, July 11, 2026, 5:00 – 7:00 PM");
+  });
+
+  it("gives the auto-created calendar event a real start/end time, not midnight", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Timed Event",
+        date: "2026-08-15",
+        time: "17:00",
+        end_time: "19:00",
+      });
+
+    expect(res.status).toBe(201);
+    const event = await Event.findOne({ ministry_id: "ktm-test", flyer_id: res.body._id });
+    expect(event).toBeTruthy();
+    expect(event.start.getUTCHours()).not.toBe(0);
+    expect(event.end).toBeTruthy();
+  });
+
   it("passes a tone through as resolvedTone when it matches one of the ministry's own categories", async () => {
     await AiProfile.create({
       ministry_id: "ktm-test",

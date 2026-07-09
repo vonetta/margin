@@ -139,6 +139,43 @@ const formatFriendlyDate = (raw) => {
   });
 };
 
+// Formats a bare "HH:MM" (24h) time, the shape a native <input type="time">
+// submits, into "5:00 PM" — anything else (already-free-text, empty) is
+// left untouched, same conservative posture as formatFriendlyDate.
+const formatFriendlyTime = (raw) => {
+  if (!raw || typeof raw !== "string") return raw;
+  const match = raw.trim().match(/^(\d{2}):(\d{2})$/);
+  if (!match) return raw;
+  const [, h, m] = match;
+  const date = new Date(2000, 0, 1, Number(h), Number(m));
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+};
+
+// Combines a bare-ISO date with optional start/end times into one display
+// string for a flyer — "Saturday, July 11, 2026, 5:00 – 7:00 PM" — since
+// every layout and the AI Studio prompt both just display whatever ends
+// up in content.date as one line; this is the single place that decides
+// how date+time gets worded, so every render path stays consistent.
+const formatFriendlyDateTime = (dateRaw, timeRaw, endTimeRaw) => {
+  const friendlyDate = formatFriendlyDate(dateRaw);
+  const start = formatFriendlyTime(timeRaw);
+  const end = formatFriendlyTime(endTimeRaw);
+
+  if (!start) return friendlyDate;
+
+  // "5:00 – 7:00 PM" when both share AM/PM, else "11:00 AM – 1:00 PM".
+  let timePart = start;
+  if (end) {
+    const [startNum, startMeridiem] = start.split(" ");
+    const [, endMeridiem] = end.split(" ");
+    timePart =
+      startMeridiem === endMeridiem ? `${startNum} – ${end}` : `${start} – ${end}`;
+  }
+
+  return friendlyDate ? `${friendlyDate}, ${timePart}` : timePart;
+};
+
 module.exports = {
   buildRule,
   isValidRecurrenceRule,
@@ -147,5 +184,7 @@ module.exports = {
   parseFlyerDate,
   buildPublicCalendarFeed,
   nextOccurrenceAfter,
+  formatFriendlyTime,
+  formatFriendlyDateTime,
   formatFriendlyDate,
 };

@@ -22,7 +22,7 @@ const { withApprovedSops } = require("../services/sopService");
 const ContentDraft = require("../models/ContentDraft");
 const Background = require("../models/Background");
 const Event = require("../models/Event");
-const { parseFlyerDate, formatFriendlyDate } = require("../services/calendarService");
+const { parseFlyerDate, formatFriendlyDateTime } = require("../services/calendarService");
 const { notifyEventPendingApproval } = require("../services/notificationService");
 const { limitsFor, planLimitError, startOfMonth } = require("../services/planLimits");
 
@@ -140,6 +140,11 @@ router.post(
     body("background_url").optional().trim(),
     body("engine").optional().isIn(["template", "ai"]).withMessage("Invalid engine"),
     body("tone").optional().trim(),
+    body("kicker").optional().trim(),
+    body("time").optional().trim(),
+    body("end_time").optional().trim(),
+    body("rsvp_by").optional().trim(),
+    body("contact").optional().trim(),
   ],
   validate,
   async (req, res) => {
@@ -160,6 +165,8 @@ router.post(
         highlights,
         audience,
         date,
+        time,
+        end_time,
         location,
         cost,
         cta,
@@ -171,6 +178,9 @@ router.post(
         background_url,
         engine = "template",
         tone,
+        kicker,
+        rsvp_by,
+        contact,
       } = req.body;
 
       // Always clamped to safe ranges regardless of where it came from —
@@ -215,14 +225,17 @@ router.post(
       const content = {
         title,
         subtitle,
+        kicker,
         description,
         theme_tags,
         highlights,
         audience,
-        date: formatFriendlyDate(date),
+        date: formatFriendlyDateTime(date, time, end_time),
         location,
         cost,
         cta,
+        rsvp_by,
+        contact,
         qr_caption: req.body.qr_caption,
       };
 
@@ -328,8 +341,12 @@ router.post(
       // Best-effort: get the event onto the calendar as something a human
       // confirms, rather than requiring it be entered a second time by
       // hand. A date that fails to parse just means no calendar entry —
-      // it never blocks the flyer itself from being created.
-      const parsedDate = parseFlyerDate(date);
+      // it never blocks the flyer itself from being created. Folding time
+      // into the same string chrono parses means the calendar entry gets
+      // a real start/end instead of always landing at midnight.
+      const parsedDate = parseFlyerDate(
+        date && time ? `${date} ${time}${end_time ? ` to ${end_time}` : ""}` : date,
+      );
       if (parsedDate) {
         try {
           const pendingEvent = await Event.create({

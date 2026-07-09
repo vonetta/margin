@@ -144,13 +144,16 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
       : "Typography feel: elegant serif headlines, clean modern body text.";
 
   const textLines = [
+    content.kicker && `Eyebrow/series line (small text above the title): "${content.kicker}"`,
     content.title && `Title: "${content.title}"`,
     content.subtitle && `Subtitle: "${content.subtitle}"`,
     content.date && `Date: "${content.date}"`,
     content.location && `Location: "${content.location}"`,
     content.cost && `Cost: "${content.cost}"`,
     content.audience && `Audience: "${content.audience}"`,
+    content.rsvp_by && `RSVP by: "${content.rsvp_by}" (render as its own small distinct line, not merged into the CTA)`,
     content.cta && `Call to action: "${content.cta}"`,
+    content.contact && `Contact (small print, e.g. near the footer): "${content.contact}"`,
   ]
     .filter(Boolean)
     .join("\n");

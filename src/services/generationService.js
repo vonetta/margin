@@ -175,6 +175,11 @@ const FINALIZE_TOOL = {
         description:
           "Structured event details mentioned anywhere in the conversation, so they can be reused to generate a matching flyer. Include this object whenever the content is about a specific event with a date, location, or similar — omit individual fields that were never mentioned. Omit the whole `event` object entirely for non-event content (a quote card, a general reflection, a recurring series with no single date). Pull description and theme_tags from the same well of detail you used to write the caption itself — the flyer should feel as substantive as the caption, not just the bare logistics.",
         properties: {
+          kicker: {
+            type: "string",
+            description:
+              "A short eyebrow/series line rendered above the title, e.g. \"Renewed — Week 3\" or \"Leadership Summit — Day 2\" — only if the conversation names a series, theme, or multi-part sequence this event belongs to. This is a different thing from the title itself; omit entirely for a standalone one-off event.",
+          },
           title: { type: "string" },
           subtitle: { type: "string" },
           description: {
@@ -199,10 +204,24 @@ const FINALIZE_TOOL = {
             description:
               "Who this is for, in a few words (e.g. \"Worship leaders, singers, and songwriters\"), if mentioned anywhere in the conversation.",
           },
-          date: { type: "string" },
+          date: {
+            type: "string",
+            description:
+              "The event's date. If a specific time (or a start–end window) was mentioned anywhere in the conversation, it MUST be included here too, worded naturally (e.g. \"Saturday, July 11, 2026, 5:00 – 7:00 PM\") — never drop a time the user actually gave you, even though it's folded into this one string rather than a separate field.",
+          },
           location: { type: "string" },
           cost: { type: "string" },
+          rsvp_by: {
+            type: "string",
+            description:
+              "An RSVP or registration deadline, if one was mentioned (e.g. \"July 8\" or \"by Friday\") — distinct from the event's own date, and distinct from the call to action.",
+          },
           cta: { type: "string" },
+          contact: {
+            type: "string",
+            description:
+              "A secondary point of contact for questions, rendered as small print (e.g. \"Questions? Text Sarah at 555-1234\"), only if a specific person/number/email was mentioned for that purpose — distinct from the main call to action or registration link.",
+          },
           registration_url: { type: "string" },
         },
       },

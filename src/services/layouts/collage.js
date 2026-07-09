@@ -54,6 +54,7 @@ const render = ({
   // rehued badge can land on an off-brand color like green.
   const brandGold = resolveColors(branding).gold;
 
+  const kicker = escapeHtml(content.kicker || "");
   const title = escapeHtml(content.title || "");
   const subtitle = escapeHtml(content.subtitle || "");
   // Only an explicit, short badge label — content.cta is a full sentence
@@ -64,6 +65,7 @@ const render = ({
   const location = escapeHtml(content.location || "");
   const cost = escapeHtml(content.cost || "");
   const audience = escapeHtml(content.audience || "");
+  const rsvpBy = escapeHtml(content.rsvp_by || "");
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
 
@@ -92,6 +94,7 @@ const render = ({
     location && { label: "Where", value: location },
     cost && { label: "Cost", value: cost },
     audience && { label: "For", value: audience },
+    rsvpBy && { label: "RSVP By", value: rsvpBy },
   ].filter(Boolean);
 
   const metaRow = metaItems.length
@@ -117,6 +120,7 @@ const render = ({
     .photo-inner { width: 100%; aspect-ratio: 1; background-size: cover; background-position: center; border-radius: 2px; }
     .seal-slot { position: absolute; top: 40px; right: 40px; z-index: 6; }
     .title-block { position: absolute; left: 0; right: 0; z-index: 4; text-align: center; padding: 0 60px; ${hasPhotos ? "bottom: 300px;" : "top: 50%; transform: translateY(-50%);"} }
+    .kicker { font-size: 15px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: ${gold}; text-shadow: 0 2px 10px rgba(0,0,0,0.6); margin-bottom: 6px; }
     .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.05; color: #fff; text-transform: uppercase; text-shadow: 0 4px 24px rgba(0,0,0,0.55); }
     .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; color: ${gold}; line-height: 1; margin-top: 8px; text-shadow: 0 2px 14px rgba(0,0,0,0.5); }
     .footer { position: absolute; left: 0; right: 0; bottom: 0; min-height: 210px; background: rgba(255,255,255,0.96); padding: 22px 48px; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 28px; flex-wrap: wrap; border-top: 4px solid ${gold}; box-sizing: border-box; }
@@ -136,6 +140,7 @@ const render = ({
   ${logo ? `<div class="top-bar">${logo}</div>` : ""}
   ${badgeText ? `<div class="seal-slot">${renderSeal(badgeText, { bg: brandGold, color: primary, size: 130 })}</div>` : ""}
   <div class="title-block">
+    ${kicker ? `<div class="kicker">${kicker}</div>` : ""}
     <div class="title">${title}</div>
     ${subtitle ? `<div class="subtitle-script">${subtitle}</div>` : ""}
   </div>

@@ -42,6 +42,7 @@ const render = ({
   const { bg, text } = resolvedColors;
   const resolvedFonts = resolveFonts(typography);
 
+  const kicker = escapeHtml(content.kicker || "");
   const title = escapeHtml(content.title || "");
   const subtitle = escapeHtml(content.subtitle || "");
   const description = escapeHtml(content.description || "");
@@ -52,6 +53,8 @@ const render = ({
   const location = escapeHtml(content.location || "");
   const cost = escapeHtml(content.cost || "");
   const cta = escapeHtml(content.cta || "");
+  const rsvpBy = escapeHtml(content.rsvp_by || "");
+  const contact = escapeHtml(content.contact || "");
   const qrCaption = escapeHtml(content.qr_caption || "Scan to register");
 
   const fontLink = fontsUrl ? `<link rel="stylesheet" href="${fontsUrl}">` : "";
@@ -163,6 +166,7 @@ const render = ({
     location && { label: "Where", value: location },
     cost && { label: "Cost", value: cost },
     audience && { label: "For", value: audience },
+    rsvpBy && { label: "RSVP By", value: rsvpBy },
   ].filter(Boolean);
 
   const tagPills =
@@ -210,6 +214,7 @@ const render = ({
     .logo-backing-circle { background: #fff; border-radius: 50%; padding: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
     .logo-backing-pill { background: #fff; border-radius: 999px; padding: 10px 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
     .photo-corner-logo { position: absolute; top: 20px; right: 20px; z-index: 3; }
+    .kicker { font-size: 15px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: ${accent}; margin-bottom: 8px; }
     .title { font-family: '${display}', serif; font-weight: 800; font-size: ${s.title_size}px; line-height: 1.0; color: ${primary}; text-transform: uppercase; text-shadow: 0 2px 14px ${hexToRgba(bg, 0.5)}; }
     .subtitle-script { font-family: '${accentFont}', cursive; font-size: ${s.subtitle_size}px; line-height: 1; margin-top: 8px; ${gradientTextStyle({ primary, accent, gold, bg })} filter: drop-shadow(0 2px 10px ${hexToRgba(bg, 0.55)}); }
     .desc { font-size: ${s.description_size}px; line-height: 1.5; color: ${hexToRgba(text, 0.85)}; font-style: italic; margin-top: 16px; max-width: 380px; }
@@ -241,6 +246,7 @@ const render = ({
     .footer-right { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
     ${footerLogoNeedsInvert ? ".footer-logo .logo { filter: brightness(0) invert(1); }" : ""}
     .cta { font-family: '${display}', serif; font-size: ${Math.round(s.cta_size * 0.82)}px; font-weight: 800; color: ${gold}; text-transform: uppercase; line-height: 1.3; max-width: 70%; }
+    .contact { font-size: 13px; color: ${hexToRgba("#ffffff", 0.75)}; margin-top: 6px; }
     .qr-slot { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
     .qr-img { width: 148px; height: 148px; background: #fff; padding: 9px; border-radius: 8px; }
     .qr-caption { font-size: 14px; color: rgba(255,255,255,0.85); font-weight: 500; }
@@ -266,6 +272,7 @@ const render = ({
     ${logoInPhotoCorner}
     <div class="content">
       ${logoInContent}
+      ${kicker ? `<div class="kicker">${kicker}</div>` : ""}
       <div class="title">${title}</div>
       ${subtitle ? `<div class="subtitle-script">${subtitle}</div>` : ""}
       ${tagPills}
@@ -281,6 +288,7 @@ const render = ({
     <div class="footer-left">
       ${logoInFooterLeft}
       ${cta ? `<div class="cta">${cta}</div>` : ""}
+      ${contact ? `<div class="contact">${contact}</div>` : ""}
     </div>
     <div class="footer-right">
       ${logoInFooterRight}
