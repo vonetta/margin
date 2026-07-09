@@ -289,6 +289,53 @@ describe("generateAiFlyer", () => {
       expect(meta.height).toBe(1350);
     });
 
+    // The real bug this guards against: the model doesn't reliably honor
+    // the prompt's "leave this area blank" instruction — one real
+    // generation drew a title headline straight through the reserved
+    // logo area, and the logo (pasted directly, with no backing) landed
+    // right on top of it in an illegible collision. The fix is an opaque
+    // backing panel behind the logo, mirroring overlayQr's existing
+    // pattern, so coverage is guaranteed regardless of what the model
+    // actually drew underneath — not dependent on prompt compliance.
+    it("fully covers whatever the model drew in the logo area, even when it ignored the blank-space instruction", async () => {
+      // A base image that's NOT blank where the logo goes — busy content
+      // (a bright color, standing in for a title the model drew there
+      // anyway) fills the entire top-center region.
+      const busyBase = await sharp({
+        create: { width: 1080, height: 1350, channels: 4, background: { r: 10, g: 200, b: 10, alpha: 1 } },
+      })
+        .png()
+        .toBuffer();
+      mockGenerateFullFlyer.mockResolvedValue(busyBase);
+      const logoBuffer = await fakeLogoPng();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => logoBuffer.buffer.slice(logoBuffer.byteOffset, logoBuffer.byteOffset + logoBuffer.byteLength),
+        headers: { get: () => "image/png" },
+      });
+
+      const result = await generateAiFlyer({
+        branding: { logo_url: "https://example.com/logo.png", colors: {} },
+        content: { title: "Worship Intensive" },
+      });
+
+      // Sample a pixel from the center of where the logo panel lands —
+      // it must be the panel's own opaque backing/logo color, not any
+      // trace of the busy green the model "drew" underneath.
+      const { data, info } = await sharp(result.png).raw().toBuffer({ resolveWithObject: true });
+      const logoWidth = Math.round(1080 * 0.34);
+      const topMargin = Math.round(1350 * 0.045);
+      const sampleX = 540; // horizontal center, where the panel is centered
+      const sampleY = topMargin + 10; // just inside the panel's top edge
+      const idx = (sampleY * info.width + sampleX) * info.channels;
+      const [r, g, b] = [data[idx], data[idx + 1], data[idx + 2]];
+      // The busy "model drew here anyway" stand-in is a distinct
+      // (10, 200, 10) green — the panel (white backing or the red logo
+      // itself) must not match it at all, proving full coverage.
+      const matchesBusyBackground = r < 30 && g > 180 && b < 30;
+      expect(matchesBusyBackground).toBe(false);
+    });
+
     it("does not composite anything, and reports has_logo: false, when the ministry has no logo", async () => {
       const basePng = await fakePng();
       mockGenerateFullFlyer.mockResolvedValue(basePng);

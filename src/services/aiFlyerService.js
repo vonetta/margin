@@ -214,12 +214,18 @@ const overlayQr = async (pngBuffer, qrUrl, { darkColor } = {}) => {
 };
 
 // Composites the ministry's REAL logo file onto the generated flyer,
-// top-center, in the exact area the prompt asked the model to leave
-// blank (LOGO_AREA) — never the model's own re-drawn interpretation of
-// it. Best-effort: a failed logo fetch just skips the overlay rather
-// than failing the whole flyer, matching fetchImageReference's posture
-// elsewhere in this file.
-const overlayLogo = async (pngBuffer, logoUrl) => {
+// top-center, in the area the prompt asked the model to leave blank
+// (LOGO_AREA) — never the model's own re-drawn interpretation of it.
+// The model doesn't reliably honor spatial "leave this blank" requests
+// (it drew a title headline straight through the reserved area in one
+// real generation, colliding badly with the pasted-on logo) — so, exactly
+// like overlayQr below, the logo is never composited directly onto
+// whatever the model drew; it always sits on its own opaque backing
+// panel first, which fully covers anything underneath regardless of
+// whether the model actually left that space blank. Best-effort: a
+// failed logo fetch just skips the overlay rather than failing the whole
+// flyer, matching fetchImageReference's posture elsewhere in this file.
+const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
   const logo = await fetchImageReference(logoUrl);
   if (!logo) return pngBuffer;
 
@@ -231,13 +237,31 @@ const overlayLogo = async (pngBuffer, logoUrl) => {
     .resize({ width: logoWidth })
     .png()
     .toBuffer();
+  const { height: logoHeight } = await sharp(resizedLogo).metadata();
+
+  const padX = Math.round(logoWidth * 0.08);
+  const padY = Math.round(logoHeight * 0.1);
+  const panelWidth = logoWidth + padX * 2;
+  const panelHeight = logoHeight + padY * 2;
+
+  const panel = await sharp({
+    create: {
+      width: panelWidth,
+      height: panelHeight,
+      channels: 4,
+      background: backingColor || { r: 255, g: 255, b: 255, alpha: 1 },
+    },
+  })
+    .composite([{ input: resizedLogo, top: padY, left: padX }])
+    .png()
+    .toBuffer();
 
   return sharp(pngBuffer)
     .composite([
       {
-        input: resizedLogo,
+        input: panel,
         top: topMargin,
-        left: Math.round((canvasWidth - logoWidth) / 2),
+        left: Math.round((canvasWidth - panelWidth) / 2),
       },
     ])
     .png()
