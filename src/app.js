@@ -25,6 +25,7 @@ const socialAuthRoutes = require("./routes/socialAuth");
 const publicSocialCallbackRoutes = require("./routes/publicSocialCallback");
 const socialPostRoutes = require("./routes/socialPosts");
 const { rehydrateScheduledPosts } = require("./services/socialPostScheduler");
+const { sweepTaskReminders } = require("./services/taskReminderService");
 const { checkMongo, checkAi } = require("./services/healthService");
 dotenv.config({
   path: process.env.NODE_ENV === "test" ? ".env.test" : ".env",
@@ -46,6 +47,12 @@ connectDB().then(() => {
   // setup interacting with a timer that outlives that specific test.
   if (process.env.NODE_ENV !== "test") {
     rehydrateScheduledPosts();
+    // A periodic sweep, not a per-task timer — due/overdue reminders
+    // don't need second-level precision, and this survives restarts
+    // without needing to rehydrate anything.
+    setInterval(() => {
+      sweepTaskReminders().catch((err) => console.error("sweepTaskReminders failed:", err));
+    }, 30 * 60 * 1000);
   }
 });
 

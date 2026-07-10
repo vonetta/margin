@@ -13,6 +13,31 @@ const notifyTaskAssigned = async ({ ministryId, task }) => {
   });
 };
 
+// Fired by taskReminderService's periodic sweep — unlike every other
+// notification here, nothing about a user's own action triggers these;
+// they fire on their own as time passes.
+const notifyTaskDueSoon = async ({ ministryId, task }) => {
+  await Notification.create({
+    ministry_id: ministryId,
+    user_id: task.assigned_to,
+    type: "task_due_soon",
+    title: "Task due soon",
+    body: task.title,
+    link: "/tasks",
+  });
+};
+
+const notifyTaskOverdue = async ({ ministryId, task }) => {
+  await Notification.create({
+    ministry_id: ministryId,
+    user_id: task.assigned_to,
+    type: "task_overdue",
+    title: "Task is overdue",
+    body: task.title,
+    link: "/tasks",
+  });
+};
+
 // Every admin/leader of the ministry gets notified — there's no single
 // "owner" of the approval queue, so this fans out to all of them rather
 // than picking one.
@@ -35,4 +60,9 @@ const notifyEventPendingApproval = async ({ ministryId, event }) => {
   );
 };
 
-module.exports = { notifyTaskAssigned, notifyEventPendingApproval };
+module.exports = {
+  notifyTaskAssigned,
+  notifyEventPendingApproval,
+  notifyTaskDueSoon,
+  notifyTaskOverdue,
+};

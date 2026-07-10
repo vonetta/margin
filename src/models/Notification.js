@@ -7,9 +7,11 @@ const notificationSchema = new mongoose.Schema({
   // task_assigned: someone gave you a task.
   // event_pending_approval: a flyer-generated event is waiting on an
   // admin/leader to approve or reject it.
+  // task_due_soon: a task assigned to you is due within 24 hours.
+  // task_overdue: a task assigned to you has passed its due date.
   type: {
     type: String,
-    enum: ["task_assigned", "event_pending_approval"],
+    enum: ["task_assigned", "event_pending_approval", "task_due_soon", "task_overdue"],
     required: true,
   },
 

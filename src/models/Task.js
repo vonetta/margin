@@ -40,6 +40,14 @@ const taskSchema = new mongoose.Schema({
   // Existing tasks simply have group_id: null.
   group_id: { type: String, default: null, index: true },
 
+  // Dedup guards for the periodic reminder sweep (taskReminderService) —
+  // not user-facing. due_soon fires once per task; overdue re-fires at
+  // most once a day while the task stays overdue, so a stamp alone
+  // (rather than a boolean) is what lets the sweep tell "already
+  // reminded today" from "reminded a week ago, nudge again."
+  due_soon_notified_at: { type: Date, default: null },
+  overdue_notified_at: { type: Date, default: null },
+
   created_at: { type: Date, default: Date.now },
 });
 
