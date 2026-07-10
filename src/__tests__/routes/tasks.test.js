@@ -263,6 +263,43 @@ describe("GET /api/tasks", () => {
     expect(res.body.length).toBe(1);
     expect(res.body[0].title).toBe("Assigned by admin");
   });
+
+  it("attaches co-assignee (sibling) info to a shared task, so it's visible outside the admin-only board", async () => {
+    const createRes = await request(app)
+      .post("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Shared setup", assigned_to: [teamAId, teamBId] });
+    expect(createRes.status).toBe(201);
+
+    const res = await request(app)
+      .get("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`);
+
+    expect(res.body.length).toBe(1);
+    expect(res.body[0].siblings).toHaveLength(1);
+    expect(res.body[0].siblings[0].name).toBe("Team B");
+    expect(res.body[0].siblings[0].status).toBe("open");
+    // Never includes the caller's own row as a "sibling" of itself.
+    expect(res.body[0].siblings.every((s) => s.user_id !== teamAId)).toBe(true);
+  });
+
+  it("does not attach a siblings field at all to an ordinary single-assignee task", async () => {
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Solo task",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .get("/api/tasks")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`);
+
+    expect(res.body[0].siblings).toBeUndefined();
+  });
 });
 
 describe("GET /api/tasks/similar", () => {

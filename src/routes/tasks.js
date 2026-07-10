@@ -97,6 +97,16 @@ router.get(
 // can also see tasks they assigned to others via mine=false — there's no
 // admin-only "see everything" here the way Events has, since task
 // creation itself isn't role-gated.
+//
+// Multi-assignee tasks previously had no visibility outside the
+// admin/leader-only "everyone" board (GET /team-overview) — a co-assignee
+// couldn't even see who else was on their own shared task from this
+// personal list. Each returned task with a group_id now carries a
+// `siblings` array (the OTHER assignees on that same shared task, by
+// name and status) — this only reveals who's already a visible party to
+// a task the caller is themselves on, not any of that person's other,
+// unrelated tasks, so it doesn't cross the same privacy line team-overview
+// avoids by staying admin/leader-gated.
 router.get(
   "/",
   [query("status").optional().isIn(STATUSES)],
@@ -113,7 +123,37 @@ router.get(
       }
 
       const tasks = await Task.find(filter).sort({ due_date: 1, created_at: -1 });
-      res.json(tasks);
+
+      const groupIds = [...new Set(tasks.map((t) => t.group_id).filter(Boolean))];
+      let siblingsByGroup = {};
+      if (groupIds.length) {
+        const siblingDocs = await Task.find({
+          ministry_id: req.ministryId,
+          group_id: { $in: groupIds },
+        }).select("group_id assigned_to status");
+        const userIds = [...new Set(siblingDocs.map((s) => s.assigned_to))];
+        const users = await User.find({ _id: { $in: userIds } }).select("name");
+        const nameById = Object.fromEntries(users.map((u) => [u._id.toString(), u.name]));
+        siblingsByGroup = siblingDocs.reduce((acc, s) => {
+          (acc[s.group_id] ||= []).push({
+            task_id: s._id.toString(),
+            user_id: s.assigned_to,
+            name: nameById[s.assigned_to] || "Someone",
+            status: s.status,
+          });
+          return acc;
+        }, {});
+      }
+
+      const withSiblings = tasks.map((t) => {
+        const obj = t.toObject();
+        if (t.group_id) {
+          obj.siblings = (siblingsByGroup[t.group_id] || []).filter((s) => s.user_id !== t.assigned_to);
+        }
+        return obj;
+      });
+
+      res.json(withSiblings);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch tasks" });
     }
