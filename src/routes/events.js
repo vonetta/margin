@@ -2,8 +2,9 @@ const express = require("express");
 const router = express.Router();
 const { body, query, validationResult } = require("express-validator");
 const Event = require("../models/Event");
+const Flyer = require("../models/Flyer");
 const { requireRole } = require("../middleware/auth");
-const { expandEvents, isValidRecurrenceRule } = require("../services/calendarService");
+const { expandEvents, isValidRecurrenceRule, parseFlyerDate } = require("../services/calendarService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -208,6 +209,51 @@ router.put("/:id/reject", requireRole("admin", "leader"), async (req, res) => {
     res.json(event);
   } catch (error) {
     res.status(500).json({ error: "Failed to reject event" });
+  }
+});
+
+// GET /api/events/:id/suggested-tasks — three generic, always-applicable
+// starter tasks for a newly-approved event. Nobody is guessed as the
+// assignee here; the frontend shows these in a review panel where a
+// human picks who each one goes to (or skips it) before anything is
+// actually created via the ordinary POST /api/tasks.
+router.get("/:id/suggested-tasks", requireRole("admin", "leader"), async (req, res) => {
+  try {
+    const event = await Event.findOne({ _id: req.params.id, ministry_id: req.ministryId });
+    if (!event) return res.status(404).json({ error: "Event not found" });
+
+    const suggestions = [
+      {
+        title: `Day-of setup for ${event.title}`,
+        description: "Prep the space and any equipment before the event starts.",
+        due_date: event.start,
+      },
+    ];
+
+    if (event.flyer_id) {
+      const flyer = await Flyer.findOne({ _id: event.flyer_id, ministry_id: req.ministryId });
+      const rsvpBy = flyer?.content?.rsvp_by;
+      if (rsvpBy) {
+        const parsed = parseFlyerDate(rsvpBy);
+        suggestions.push({
+          title: `RSVP follow-up for ${event.title}`,
+          description: "Follow up with anyone who hasn't RSVP'd yet.",
+          due_date: parsed?.start || null,
+        });
+      }
+    }
+
+    const debriefAnchor = event.end || event.start;
+    suggestions.push({
+      title: `Thank-you / debrief for ${event.title}`,
+      description: "Send thank-yous and debrief what worked and what didn't.",
+      due_date: new Date(debriefAnchor.getTime() + 2 * 24 * 60 * 60 * 1000),
+    });
+
+    res.json(suggestions);
+  } catch (error) {
+    console.error("Suggested tasks error:", error);
+    res.status(500).json({ error: "Failed to compute suggested tasks" });
   }
 });
 

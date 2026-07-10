@@ -4,6 +4,7 @@ const { registerMember } = require("../../testHelpers/register");
 const app = require("../../app");
 const Ministry = require("../../models/Ministry");
 const Event = require("../../models/Event");
+const Flyer = require("../../models/Flyer");
 const User = require("../../models/User");
 
 const testMinistry = {
@@ -21,6 +22,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
+  await Flyer.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["events-admin@ktm.com", "events-team@ktm.com"] },
   });
@@ -29,6 +31,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
+  await Flyer.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["events-admin@ktm.com", "events-team@ktm.com"] },
   });
@@ -267,6 +270,75 @@ describe("PUT /api/events/:id/approve and /reject", () => {
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("rejected");
+  });
+});
+
+describe("GET /api/events/:id/suggested-tasks", () => {
+  it("suggests day-of setup and thank-you tasks for an event with no linked flyer", async () => {
+    const event = await Event.create({
+      ministry_id: "ktm-test",
+      title: "Worship Night",
+      start: new Date("2026-06-05T18:00:00Z"),
+      end: new Date("2026-06-05T20:00:00Z"),
+      status: "approved",
+    });
+
+    const res = await request(app)
+      .get(`/api/events/${event._id}/suggested-tasks`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((s) => s.title)).toEqual([
+      "Day-of setup for Worship Night",
+      "Thank-you / debrief for Worship Night",
+    ]);
+    expect(new Date(res.body[0].due_date).toISOString()).toBe(event.start.toISOString());
+  });
+
+  it("includes an RSVP follow-up only when the linked flyer has an rsvp_by", async () => {
+    const flyer = await Flyer.create({
+      ministry_id: "ktm-test",
+      title: "Worship Night Flyer",
+      layout: "monument",
+      content: { rsvp_by: "June 3, 2026" },
+    });
+    const event = await Event.create({
+      ministry_id: "ktm-test",
+      title: "Worship Night",
+      start: new Date("2026-06-05T18:00:00Z"),
+      status: "approved",
+      source: "flyer",
+      flyer_id: flyer._id.toString(),
+    });
+
+    const res = await request(app)
+      .get(`/api/events/${event._id}/suggested-tasks`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((s) => s.title)).toEqual([
+      "Day-of setup for Worship Night",
+      "RSVP follow-up for Worship Night",
+      "Thank-you / debrief for Worship Night",
+    ]);
+  });
+
+  it("rejects a team member (requires admin/leader)", async () => {
+    const event = await Event.create({
+      ministry_id: "ktm-test",
+      title: "Worship Night",
+      start: new Date("2026-06-05T18:00:00Z"),
+      status: "approved",
+    });
+
+    const res = await request(app)
+      .get(`/api/events/${event._id}/suggested-tasks`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+
+    expect(res.status).toBe(403);
   });
 });
 
