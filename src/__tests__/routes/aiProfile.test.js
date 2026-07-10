@@ -475,7 +475,14 @@ describe("GET /api/profile/sops/drafts/:id/export", () => {
   });
 
   it("404s for a draft that doesn't belong to the requesting ministry", async () => {
+    // Cleaned up front, not just in afterAll — if a prior run of this
+    // suite got interrupted before its own cleanup ran, a stale
+    // "other-admin@ktm.com" with a leftover ktm-other-test membership
+    // makes this test's own registration 400 ("already a member"),
+    // which silently turns the rest of the test into an auth failure
+    // instead of the 404 it's meant to check.
     await Ministry.deleteMany({ ministry_id: "ktm-other-test" });
+    await User.deleteMany({ email: "other-admin@ktm.com" });
     await Ministry.create({ ministry_id: "ktm-other-test", name: "Other", plan: "enterprise" });
     const otherRes = await request(app).post("/api/auth/register").send({
       email: "other-admin@ktm.com",
