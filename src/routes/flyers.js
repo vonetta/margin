@@ -22,7 +22,7 @@ const { withApprovedSops } = require("../services/sopService");
 const ContentDraft = require("../models/ContentDraft");
 const Background = require("../models/Background");
 const Event = require("../models/Event");
-const { parseFlyerDate, formatFriendlyDateTime } = require("../services/calendarService");
+const { parseFlyerDate, formatFriendlyDateTime, formatFriendlyDate } = require("../services/calendarService");
 const { notifyEventPendingApproval } = require("../services/notificationService");
 const { limitsFor, planLimitError, startOfMonth } = require("../services/planLimits");
 
@@ -234,7 +234,7 @@ router.post(
         location,
         cost,
         cta,
-        rsvp_by,
+        rsvp_by: formatFriendlyDate(rsvp_by),
         contact,
         qr_caption: req.body.qr_caption,
       };

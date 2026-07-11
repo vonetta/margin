@@ -59,14 +59,27 @@ const gatherReferenceImages = async ({ host, speakers }) => {
   return fetched.filter(Boolean);
 };
 
-const describeReferenceImages = (referenceImages) =>
-  referenceImages
+// A dominant hero-sized portrait makes sense for a formal teaching/
+// preaching event where the host IS the draw — it reads as mismatched
+// on a casual, kid-oriented, or community event where the host is just
+// running things, not the headline attraction. This mirrors the same
+// ENERGETIC_TONE_HINTS check used for the overall design direction, so
+// the two stay consistent instead of the design going casual while the
+// portrait still gets gala-scale treatment.
+const describeReferenceImages = (referenceImages, tone = null) => {
+  const t = (tone || "").toLowerCase();
+  const isCasual = ENERGETIC_TONE_HINTS.some((hint) => t.includes(hint));
+  const sizingNote = isCasual
+    ? "keep it modest and proportionate — a small supporting photo (e.g. a corner circle or badge), not a large dominant hero portrait, since this is a casual/community event where the host is running things, not the headline attraction"
+    : "a portrait cutout, a circular frame, or similar, sized as a genuine focal point";
+  return referenceImages
     .map((ref, i) => {
       const n = i + 1;
       const roleLabel = ref.role === "host" ? "the host" : "a speaker";
-      return `Attached image ${n} is a real photo of ${ref.name || roleLabel} (${roleLabel}) — incorporate their actual likeness naturally into the design (a portrait cutout, a circular frame, or similar), don't replace them with a generic stand-in.`;
+      return `Attached image ${n} is a real photo of ${ref.name || roleLabel} (${roleLabel}) — incorporate their actual likeness naturally into the design (${sizingNote}), don't replace them with a generic stand-in.`;
     })
     .join("\n");
+};
 
 // The image model has no equivalent of the template engine's per-tone font
 // library — it just needs a few words of art direction. A ministry can
@@ -158,7 +171,7 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
     .filter(Boolean)
     .join("\n");
 
-  const referenceLine = describeReferenceImages(referenceImages);
+  const referenceLine = describeReferenceImages(referenceImages, tone);
 
   const hasLogo = !!branding.logo_url;
   // Never asks the model to letter the organization's name anywhere when
@@ -177,12 +190,14 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
 
 Brand colors: ${palette || "a tasteful, cohesive palette"}. ${fontLine}
 
-Event details — render this text EXACTLY as written, spelled correctly, no typos, no garbled or illegible letters, no invented details beyond what's listed. Use proper title case or sentence case for the title and headlines — never render headline text in all-lowercase. Do not add any other text anywhere in the design beyond what's listed here plus the organization's name — no invented promo codes, taglines, hashtags, extra labels, or filler numbers/strings of any kind:
+Event details — render this text EXACTLY as written, character for character, including every digit (e.g. a time like "5:00" must never be shortened to "5:0", an address must never be abbreviated or cut short) — spelled correctly, no typos, no garbled or illegible letters, no invented details beyond what's listed. Use proper title case or sentence case for the title and headlines — never render headline text in all-lowercase. Do not add any other text anywhere in the design beyond what's listed here plus the organization's name — no invented promo codes, taglines, hashtags, extra labels, or filler numbers/strings of any kind:
 ${textLines}
 
 ${referenceLine}
 
 ${logoLine}
+
+Composition safety margins — every one of these is a hard requirement: keep ALL text fully inside the canvas with a comfortable margin from every edge — never let a word or line get cropped, cut off, or run off the side, top, or bottom of the image. Every text element needs its own clear empty space around it with no overlap — the title must not overlap or run into the reserved logo corner, the eyebrow/kicker line above the title must sit with visible breathing room above the title (never overlapping or touching it), and small print like the contact line must not overlap the QR-code corner. If a line of text is long, wrap it onto multiple lines or reduce its size rather than letting it collide with anything else or run off the canvas.
 
 Design direction: ${toneDesign?.direction || DEFAULT_DESIGN_DIRECTION} Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements across the entire composition, in keeping with the direction above. No stock-photo clutter, no placeholder people beyond the reference photos provided. Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward. This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
 };

@@ -52,6 +52,28 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("real photo");
   });
 
+  it("asks for a modest, supporting-sized host photo on a casual/party-toned event", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: {},
+      content: { title: "Pizza Party" },
+      referenceImages: [{ role: "host", name: "Vonetta" }],
+      tone: "playful and festive party",
+    });
+    expect(prompt).toContain("modest and proportionate");
+    expect(prompt).toContain("not a large dominant hero portrait");
+  });
+
+  it("allows a dominant hero-sized host photo when the tone isn't casual", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: {},
+      content: { title: "Worship Intensive" },
+      referenceImages: [{ role: "host", name: "Apostle Khy" }],
+      tone: "formal",
+    });
+    expect(prompt).not.toContain("modest and proportionate");
+    expect(prompt).toContain("genuine focal point");
+  });
+
   // The model doesn't literally copy reference pixels — it re-draws its
   // own interpretation, and re-drawn small text (a multi-word wordmark)
   // is exactly where these models introduce typos. So the logo is never
