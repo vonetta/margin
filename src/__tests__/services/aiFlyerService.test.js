@@ -39,7 +39,8 @@ describe("buildFullFlyerPrompt", () => {
     });
     expect(prompt).toContain('Eyebrow/series line (small text above the title): "Renewed — Week 3"');
     expect(prompt).toContain('RSVP by: "July 8"');
-    expect(prompt).toContain('Contact (small print, e.g. near the footer): "Questions? Text Sarah at 555-1234"');
+    expect(prompt).toContain('Contact (small print in the footer area, on the OPPOSITE side of the canvas from the QR-code corner, never underneath or crowding it): "Questions? Text Sarah at 555-1234"');
+    expect(prompt).toContain("must render in full, every character");
   });
 
   it("mentions incorporating a reference photo when a host reference image is present", () => {

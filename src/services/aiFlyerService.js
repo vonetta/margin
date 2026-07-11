@@ -166,7 +166,7 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
     content.audience && `Audience: "${content.audience}"`,
     content.rsvp_by && `RSVP by: "${content.rsvp_by}" (render as its own small distinct line, not merged into the CTA)`,
     content.cta && `Call to action: "${content.cta}"`,
-    content.contact && `Contact (small print, e.g. near the footer): "${content.contact}"`,
+    content.contact && `Contact (small print in the footer area, on the OPPOSITE side of the canvas from the QR-code corner, never underneath or crowding it): "${content.contact}" — this must render in full, every character, on a single line with clear margin from the canvas edge; shrink the text size if needed rather than letting any part of it run off the edge or get cut short.`,
   ]
     .filter(Boolean)
     .join("\n");
