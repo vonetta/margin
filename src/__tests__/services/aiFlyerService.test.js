@@ -23,6 +23,15 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain('rendering "211-232-4356" as "211-232-456"');
   });
 
+  it("requires the location to render in full even when squeezed by a nearby decorative shape", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Pizza Party", location: "123 Main St, Los Angeles, CA" },
+    });
+    expect(prompt).toContain('Location: "123 Main St, Los Angeles, CA" — this must render in full');
+    expect(prompt).toContain("never let the shape's own edge or a neighboring badge");
+  });
+
   it("bans decorative elements (badges, shapes) from overlapping text", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", colors: { primary: "#03293F" } },

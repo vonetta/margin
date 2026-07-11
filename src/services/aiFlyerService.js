@@ -161,7 +161,7 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
     content.title && `Title: "${content.title}"`,
     content.subtitle && `Subtitle: "${content.subtitle}"`,
     content.date && `Date: "${content.date}" — this must render in full, every character, with clear margin from the canvas edge; shrink the text or wrap it onto two lines rather than letting any part of it run off the edge or get cut short. Pay special attention to any trailing zero in a time (e.g. the "30" in "5:30") — these are real digits, not padding, and must never be dropped or shortened (never render "5:30" as "5:3").`,
-    content.location && `Location: "${content.location}"`,
+    content.location && `Location: "${content.location}" — this must render in full, every character, never truncated or cut short partway through. If it sits inside or alongside a decorative shape (a ribbon, banner, badge, or similar), that shape must be drawn large enough to fully contain the complete text — never let the shape's own edge or a neighboring badge (like a cost circle) squeeze, crowd, or cut the address off early. If it doesn't comfortably fit on one line, wrap it onto a second line inside the same shape rather than shortening it.`,
     content.cost && `Cost: "${content.cost}"`,
     content.audience && `Audience: "${content.audience}"`,
     content.rsvp_by && `RSVP by: "${content.rsvp_by}" (render as its own small distinct line, not merged into the CTA)`,
