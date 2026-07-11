@@ -160,7 +160,7 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
     content.kicker && `Eyebrow/series line (small text above the title): "${content.kicker}"`,
     content.title && `Title: "${content.title}"`,
     content.subtitle && `Subtitle: "${content.subtitle}"`,
-    content.date && `Date: "${content.date}" — this must render in full, every character, with clear margin from the canvas edge; shrink the text or wrap it onto two lines rather than letting any part of it run off the edge or get cut short.`,
+    content.date && `Date: "${content.date}" — this must render in full, every character, with clear margin from the canvas edge; shrink the text or wrap it onto two lines rather than letting any part of it run off the edge or get cut short. Pay special attention to any trailing zero in a time (e.g. the "30" in "5:30") — these are real digits, not padding, and must never be dropped or shortened (never render "5:30" as "5:3").`,
     content.location && `Location: "${content.location}"`,
     content.cost && `Cost: "${content.cost}"`,
     content.audience && `Audience: "${content.audience}"`,

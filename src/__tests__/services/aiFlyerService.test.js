@@ -27,6 +27,14 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("#DAAE4F");
   });
 
+  it("calls out trailing zeros in the date/time line so they don't get dropped", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Pizza Party", date: "Saturday, July 18, 2026, 5:30 - 8:00 PM" },
+    });
+    expect(prompt).toContain('never render "5:30" as "5:3"');
+  });
+
   it("requires legible text contrast and bans the model from drawing its own QR-like pattern", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", colors: { primary: "#03293F" } },
