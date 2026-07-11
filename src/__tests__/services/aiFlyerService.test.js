@@ -15,6 +15,23 @@ const fakePng = async (width = 1080, height = 1350) =>
     .toBuffer();
 
 describe("buildFullFlyerPrompt", () => {
+  it("calls out phone number digit preservation in the contact line", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Pizza Party", contact: "Vonetta 211-232-4356" },
+    });
+    expect(prompt).toContain('rendering "211-232-4356" as "211-232-456"');
+  });
+
+  it("bans decorative elements (badges, shapes) from overlapping text", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Pizza Party" },
+    });
+    expect(prompt).toContain("a circle, badge, shape, or icon");
+    expect(prompt).toContain("must never sit on top of or overlap any text");
+  });
+
   it("includes exact event text and brand colors", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", colors: { primary: "#03293F", gold: "#DAAE4F" } },
