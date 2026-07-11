@@ -185,6 +185,43 @@ describe("POST /api/flyers/generate", () => {
     expect(res.body.content.date).toBe("Saturday, July 11, 2026, 5:00 – 7:00 PM");
   });
 
+  it("stores raw date/time/end_time/rsvp_by alongside the formatted display strings", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Worship Intensive",
+        date: "2026-07-11",
+        time: "17:00",
+        end_time: "19:00",
+        rsvp_by: "2026-07-08",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.content.date_raw).toBe("2026-07-11");
+    expect(res.body.content.time_raw).toBe("17:00");
+    expect(res.body.content.end_time_raw).toBe("19:00");
+    expect(res.body.content.rsvp_by_raw).toBe("2026-07-08");
+  });
+
+  it("does not store a raw value for free-text date/rsvp_by that isn't picker-shaped", async () => {
+    const res = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        title: "Worship Intensive",
+        date: "next Friday",
+        rsvp_by: "July 8",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.content.date_raw).toBeUndefined();
+    expect(res.body.content.time_raw).toBeUndefined();
+    expect(res.body.content.rsvp_by_raw).toBeUndefined();
+  });
+
   it("gives the auto-created calendar event a real start/end time, not midnight", async () => {
     const res = await request(app)
       .post("/api/flyers/generate")

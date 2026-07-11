@@ -222,6 +222,20 @@ router.post(
         });
       }
 
+      // Only ever the exact shape a native <input type="date">/type="time">
+      // can round-trip (bare YYYY-MM-DD / HH:MM) — never AI-drafted free
+      // text like "next Friday", which formatFriendlyDate/Time already
+      // pass through unchanged rather than reformat. Reusing that same
+      // "does this look like a bare picker value" check here keeps this
+      // storage honest: something a raw_* field couldn't safely repopulate
+      // a picker with just doesn't get stored, so an edit later either
+      // gets a real usable value or the existing blank-with-a-note
+      // fallback — never a raw_* value that silently fails to populate.
+      const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      const ISO_TIME_RE = /^\d{2}:\d{2}$/;
+      const asRawDate = (v) => (ISO_DATE_RE.test(v || "") ? v : undefined);
+      const asRawTime = (v) => (ISO_TIME_RE.test(v || "") ? v : undefined);
+
       const content = {
         title,
         subtitle,
@@ -231,10 +245,19 @@ router.post(
         highlights,
         audience,
         date: formatFriendlyDateTime(date, time, end_time),
+        // date_raw/time_raw/end_time_raw/rsvp_by_raw: the exact picker
+        // values behind the formatted display strings above, kept only so
+        // editing this flyer later (see routes handleEditFlyer client-side)
+        // can repopulate the date/time inputs instead of leaving them
+        // blank. Purely additive — nothing reads content.date from these.
+        date_raw: asRawDate(date),
+        time_raw: asRawTime(time),
+        end_time_raw: asRawTime(end_time),
         location,
         cost,
         cta,
         rsvp_by: formatFriendlyDate(rsvp_by),
+        rsvp_by_raw: asRawDate(rsvp_by),
         contact,
         qr_caption: req.body.qr_caption,
       };
