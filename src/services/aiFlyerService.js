@@ -129,7 +129,7 @@ const LOGO_AREA = {
   margin: 0.05, // distance from the canvas edge, as a fraction of width
 };
 
-const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null }) => {
+const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null, qrUrl = null }) => {
   const colors = branding.colors || {};
   const palette = [
     colors.primary && `deep primary ${colors.primary}`,
@@ -197,13 +197,13 @@ ${referenceLine}
 
 ${logoLine}
 
-Composition safety margins — every one of these is a hard requirement: keep ALL text fully inside the canvas with a comfortable margin from every edge — never let a word or line get cropped, cut off, or run off the side, top, or bottom of the image. Every text element needs its own clear empty space around it with no overlap — the title must not overlap or run into the reserved logo corner, the eyebrow/kicker line above the title must sit with visible breathing room above the title (never overlapping or touching it), and small print like the contact line must not overlap the QR-code corner. If a line of text is long, wrap it onto multiple lines or reduce its size rather than letting it collide with anything else or run off the canvas.
+Composition safety margins — every one of these is a hard requirement: keep ALL text fully inside the canvas with a comfortable margin from every edge — never let a word or line get cropped, cut off, or run off the side, top, or bottom of the image. Every text element needs its own clear empty space around it with no overlap — the title must not overlap or run into the reserved logo corner${qrUrl ? ", the eyebrow/kicker line above the title must sit with visible breathing room above the title (never overlapping or touching it), and small print like the contact line must not overlap the QR-code corner" : ", and the eyebrow/kicker line above the title must sit with visible breathing room above the title (never overlapping or touching it)"}. If a line of text is long, wrap it onto multiple lines or reduce its size rather than letting it collide with anything else or run off the canvas.
 
 Legibility is a hard requirement, not a style choice: every single text element must have strong, clearly readable contrast against whatever is directly behind it — never a color close in tone to its background (e.g. light pink text on a cream/light-pink background, or pale gold on white). If a text element sits on a busy, textured, or similar-toned area, give it a solid or semi-opaque backing panel, a strong outline, or a drop shadow so it stays legible — don't just change its color and hope. Also: never render any text, number, or line twice, faded, doubled, or as a ghosted duplicate anywhere in the design — each piece of text appears exactly once, fully opaque.
 
-Never draw anything that resembles a QR code, barcode, or scannable-looking grid/dot pattern anywhere in the design, including inside decorative elements — a real QR code is composited into the reserved bottom-right corner afterward, and the model attempting to draw its own (even as a texture or pattern) reads as a broken second code once the real one is placed on top.
+${qrUrl ? "Never draw anything that resembles a QR code, barcode, or scannable-looking grid/dot pattern anywhere in the design, including inside decorative elements — a real QR code is composited into the reserved bottom-right corner afterward, and the model attempting to draw its own (even as a texture or pattern) reads as a broken second code once the real one is placed on top." : "This flyer has no QR code — never draw one, and never leave a blank reserved square/box anywhere in the design (e.g. in a corner) as if space were being held for one. Fill the entire canvas with real design content; an empty box reads as a mistake, not a design choice."}
 
-Design direction: ${toneDesign?.direction || DEFAULT_DESIGN_DIRECTION} Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements across the entire composition, in keeping with the direction above. No stock-photo clutter, no placeholder people beyond the reference photos provided. Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward. This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
+Design direction: ${toneDesign?.direction || DEFAULT_DESIGN_DIRECTION} Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements across the entire composition, in keeping with the direction above. No stock-photo clutter, no placeholder people beyond the reference photos provided.${qrUrl ? " Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward." : ""} This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
 };
 
 // Composites a real, guaranteed-scannable QR code onto the generated image
@@ -316,7 +316,7 @@ const generateAiFlyer = async ({
   const toneSource = [content.title, content.subtitle, content.description].filter(Boolean).join(" ");
   const tone =
     resolvedTone !== undefined ? resolvedTone : inferTone(toneSource, typeSystem?.tone_keywords);
-  const prompt = buildFullFlyerPrompt({ branding, content, referenceImages, typeSystem, tone });
+  const prompt = buildFullFlyerPrompt({ branding, content, referenceImages, typeSystem, tone, qrUrl });
   const aspectRatio = ASPECT_RATIO_BY_SIZE[size] || ASPECT_RATIO_BY_SIZE.social;
 
   let png = await generateFullFlyer(prompt, referenceImages, { aspectRatio });

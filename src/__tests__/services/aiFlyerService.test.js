@@ -35,14 +35,26 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain('never render "5:30" as "5:3"');
   });
 
-  it("requires legible text contrast and bans the model from drawing its own QR-like pattern", () => {
+  it("requires legible text contrast always, and bans the model's own QR-like pattern + reserves a corner only when a QR will be composited", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", colors: { primary: "#03293F" } },
       content: { title: "Worship Intensive" },
+      qrUrl: "https://example.com/rsvp",
     });
     expect(prompt).toContain("strong, clearly readable contrast");
     expect(prompt).toContain("never render any text, number, or line twice, faded, doubled, or as a ghosted duplicate");
     expect(prompt).toContain("Never draw anything that resembles a QR code, barcode, or scannable-looking grid/dot pattern");
+    expect(prompt).toContain("a QR code will be composited there afterward");
+  });
+
+  it("tells the model not to reserve or draw any QR-shaped space when there is no QR code", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Worship Intensive" },
+    });
+    expect(prompt).toContain("This flyer has no QR code — never draw one, and never leave a blank reserved square/box");
+    expect(prompt).not.toContain("a QR code will be composited there afterward");
+    expect(prompt).not.toContain("Never draw anything that resembles a QR code, barcode, or scannable-looking grid/dot pattern anywhere in the design, including inside decorative elements — a real QR code is composited");
   });
 
   it("includes kicker, rsvp_by, and contact when provided", () => {
