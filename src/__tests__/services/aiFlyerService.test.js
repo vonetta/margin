@@ -27,6 +27,16 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("#DAAE4F");
   });
 
+  it("requires legible text contrast and bans the model from drawing its own QR-like pattern", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Worship Intensive" },
+    });
+    expect(prompt).toContain("strong, clearly readable contrast");
+    expect(prompt).toContain("never render any text, number, or line twice, faded, doubled, or as a ghosted duplicate");
+    expect(prompt).toContain("Never draw anything that resembles a QR code, barcode, or scannable-looking grid/dot pattern");
+  });
+
   it("includes kicker, rsvp_by, and contact when provided", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", colors: { primary: "#03293F" } },

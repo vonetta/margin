@@ -160,13 +160,13 @@ const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [
     content.kicker && `Eyebrow/series line (small text above the title): "${content.kicker}"`,
     content.title && `Title: "${content.title}"`,
     content.subtitle && `Subtitle: "${content.subtitle}"`,
-    content.date && `Date: "${content.date}"`,
+    content.date && `Date: "${content.date}" — this must render in full, every character, with clear margin from the canvas edge; shrink the text or wrap it onto two lines rather than letting any part of it run off the edge or get cut short.`,
     content.location && `Location: "${content.location}"`,
     content.cost && `Cost: "${content.cost}"`,
     content.audience && `Audience: "${content.audience}"`,
     content.rsvp_by && `RSVP by: "${content.rsvp_by}" (render as its own small distinct line, not merged into the CTA)`,
     content.cta && `Call to action: "${content.cta}"`,
-    content.contact && `Contact (small print in the footer area, on the OPPOSITE side of the canvas from the QR-code corner, never underneath or crowding it): "${content.contact}" — this must render in full, every character, on a single line with clear margin from the canvas edge; shrink the text size if needed rather than letting any part of it run off the edge or get cut short.`,
+    content.contact && `Contact (small print in the footer area, on the OPPOSITE side of the canvas from the QR-code corner, never underneath or crowding it): "${content.contact}" — this must render in full, every character, on a single line with clear margin from the canvas edge; shrink the text size if needed rather than letting any part of it run off the edge or get cut short. It's fine (not "inventing" content) to prefix it with a short generic label like "Contact:" if that reads better, but never add any actual new information beyond what's given here.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -198,6 +198,10 @@ ${referenceLine}
 ${logoLine}
 
 Composition safety margins — every one of these is a hard requirement: keep ALL text fully inside the canvas with a comfortable margin from every edge — never let a word or line get cropped, cut off, or run off the side, top, or bottom of the image. Every text element needs its own clear empty space around it with no overlap — the title must not overlap or run into the reserved logo corner, the eyebrow/kicker line above the title must sit with visible breathing room above the title (never overlapping or touching it), and small print like the contact line must not overlap the QR-code corner. If a line of text is long, wrap it onto multiple lines or reduce its size rather than letting it collide with anything else or run off the canvas.
+
+Legibility is a hard requirement, not a style choice: every single text element must have strong, clearly readable contrast against whatever is directly behind it — never a color close in tone to its background (e.g. light pink text on a cream/light-pink background, or pale gold on white). If a text element sits on a busy, textured, or similar-toned area, give it a solid or semi-opaque backing panel, a strong outline, or a drop shadow so it stays legible — don't just change its color and hope. Also: never render any text, number, or line twice, faded, doubled, or as a ghosted duplicate anywhere in the design — each piece of text appears exactly once, fully opaque.
+
+Never draw anything that resembles a QR code, barcode, or scannable-looking grid/dot pattern anywhere in the design, including inside decorative elements — a real QR code is composited into the reserved bottom-right corner afterward, and the model attempting to draw its own (even as a texture or pattern) reads as a broken second code once the real one is placed on top.
 
 Design direction: ${toneDesign?.direction || DEFAULT_DESIGN_DIRECTION} Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements across the entire composition, in keeping with the direction above. No stock-photo clutter, no placeholder people beyond the reference photos provided. Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward. This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
 };
