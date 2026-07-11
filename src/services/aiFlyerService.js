@@ -255,18 +255,24 @@ const overlayQr = async (pngBuffer, qrUrl, { darkColor } = {}) => {
 // the top-left corner — never the model's own re-drawn interpretation of
 // it (see LOGO_AREA above for why a corner, not a top-center band). Same
 // structure as overlayQr just above: the logo sits on its own opaque
-// backing square, so coverage is guaranteed by the compositing itself
+// backing, so coverage is guaranteed by the compositing itself
 // regardless of whether the model actually left that corner blank —
 // exactly the QR code's proven, collision-free pattern. Best-effort: a
 // failed logo fetch just skips the overlay rather than failing the whole
 // flyer, matching fetchImageReference's posture elsewhere in this file.
+//
+// The backing is intentionally NOT a big hard-edged square — a real
+// ministry logo is usually already a finished, self-contained PNG, so a
+// large padded white card behind it reads as an obvious, unwanted box
+// rather than a design choice. A tight, rounded-corner card (small
+// padding, generous corner radius) keeps the same guaranteed-contrast
+// coverage without looking pasted-on.
 const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
   const logo = await fetchImageReference(logoUrl);
   if (!logo) return pngBuffer;
 
   const { width: canvasWidth } = await sharp(pngBuffer).metadata();
   const logoSize = Math.round(canvasWidth * LOGO_AREA.widthRatio);
-  const pad = Math.round(logoSize * 0.12);
   const margin = Math.round(canvasWidth * LOGO_AREA.margin);
 
   const resizedLogo = await sharp(logo.buffer)
@@ -275,14 +281,14 @@ const overlayLogo = async (pngBuffer, logoUrl, { backingColor } = {}) => {
     .toBuffer();
   const { height: resizedHeight } = await sharp(resizedLogo).metadata();
 
-  const backing = await sharp({
-    create: {
-      width: logoSize + pad * 2,
-      height: resizedHeight + pad * 2,
-      channels: 4,
-      background: backingColor || { r: 255, g: 255, b: 255, alpha: 1 },
-    },
-  })
+  const pad = Math.round(logoSize * 0.05);
+  const backingWidth = logoSize + pad * 2;
+  const backingHeight = resizedHeight + pad * 2;
+  const cornerRadius = Math.round(Math.min(backingWidth, backingHeight) * 0.08);
+  const { r, g, b } = backingColor || { r: 255, g: 255, b: 255 };
+  const roundedRectSvg = `<svg width="${backingWidth}" height="${backingHeight}"><rect x="0" y="0" width="${backingWidth}" height="${backingHeight}" rx="${cornerRadius}" ry="${cornerRadius}" fill="rgb(${r},${g},${b})"/></svg>`;
+
+  const backing = await sharp(Buffer.from(roundedRectSvg))
     .composite([{ input: resizedLogo, top: pad, left: pad }])
     .png()
     .toBuffer();

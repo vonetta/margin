@@ -418,6 +418,40 @@ describe("generateAiFlyer", () => {
       expect(meta.height).toBe(1350);
     });
 
+    // The backing must be a tight, rounded-corner card, not the old big
+    // hard-edged square — the very corner of the badge's bounding box
+    // should show whatever's behind it (rounded away), while the logo
+    // itself stays fully covered (the test above/below this one).
+    it("rounds the logo backing's corners instead of a hard-edged square", async () => {
+      const busyBase = await sharp({
+        create: { width: 1080, height: 1350, channels: 4, background: { r: 10, g: 200, b: 10, alpha: 1 } },
+      })
+        .png()
+        .toBuffer();
+      mockGenerateFullFlyer.mockResolvedValue(busyBase);
+      const logoBuffer = await fakeLogoPng();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => logoBuffer.buffer.slice(logoBuffer.byteOffset, logoBuffer.byteOffset + logoBuffer.byteLength),
+        headers: { get: () => "image/png" },
+      });
+
+      const result = await generateAiFlyer({
+        branding: { logo_url: "https://example.com/logo.png", colors: {} },
+        content: { title: "Worship Intensive" },
+      });
+
+      // The extreme corner of the badge's bounding box (top-left-most
+      // pixel) — a hard square would cover this with backing color; a
+      // rounded card rounds it away, leaving the busy green visible.
+      const { data, info } = await sharp(result.png).raw().toBuffer({ resolveWithObject: true });
+      const margin = Math.round(1080 * 0.05);
+      const idx = (margin * info.width + margin) * info.channels;
+      const [r, g, b] = [data[idx], data[idx + 1], data[idx + 2]];
+      const matchesBusyBackground = r < 30 && g > 180 && b < 30;
+      expect(matchesBusyBackground).toBe(true);
+    });
+
     // The real bug this guards against: the model doesn't reliably honor
     // the prompt's "leave this area blank" instruction — one real
     // generation drew a title headline straight through the reserved
