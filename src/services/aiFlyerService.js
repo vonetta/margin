@@ -3,6 +3,7 @@ const { generateFullFlyer } = require("./imageService");
 const { generateQRBuffer } = require("./qrService");
 const { selectTypography, inferTone } = require("./typographyService");
 const { resolveColors, deriveColorVariants } = require("./layouts/shared");
+const { parseSafeUrl, assertPublicHost } = require("./urlSafetyService");
 
 // Same color-variant math the template engine already uses (deriveColorVariants)
 // — every variant is mathematically rotated from the ministry's own brand
@@ -20,18 +21,67 @@ const ASPECT_RATIO_BY_SIZE = {
   print: "3:4",
 };
 
+// Every URL fetched here today only ever comes from our own upload
+// pipeline (a Person's headshot_url/cutout_url, a ministry's logo_url —
+// see people.js's field whitelist, which excludes those from direct user
+// input), never pasted in raw by a user. Still guarded the same way
+// urlSafetyService.safeFetch guards genuinely untrusted input: only a
+// publicly-routable host is fetched (blocks loopback/private/link-local,
+// including the cloud metadata endpoint), redirects are followed
+// manually with the same check re-applied at every hop, and the response
+// is size-capped — so if a future feature ever lets a user paste an
+// arbitrary image URL into one of these fields, this function is already
+// safe rather than becoming a silent SSRF hole on that day.
+const MAX_REFERENCE_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_REDIRECTS = 3;
+const IMAGE_FETCH_TIMEOUT_MS = 8000;
+
+// Same shape as urlSafetyService's own readCapped, but returns a Buffer
+// instead of decoding to a utf8 string — that decode is lossy/corrupting
+// for binary image data, so this can't just reuse that helper directly.
+const readCappedBinary = async (response, maxBytes) => {
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((c) => Buffer.from(c)));
+};
+
 // Download a remote image (a person's headshot, a ministry logo) into a
 // buffer the model can take as a grounding reference. Best-effort — a
-// failed fetch just means that one reference is skipped, not that the
-// whole flyer generation fails.
+// failed fetch, an unsafe URL, or an oversized response just means that
+// one reference is skipped, not that the whole flyer generation fails.
 const fetchImageReference = async (url) => {
   if (!url) return null;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const arrayBuffer = await res.arrayBuffer();
-    const contentType = res.headers.get("content-type") || "image/jpeg";
-    return { buffer: Buffer.from(arrayBuffer), mimeType: contentType };
+    let current = parseSafeUrl(url);
+    for (let hop = 0; hop <= MAX_IMAGE_REDIRECTS; hop++) {
+      await assertPublicHost(current.hostname);
+      const res = await fetch(current.href, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+      });
+      if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+        current = parseSafeUrl(new URL(res.headers.get("location"), current.href).href);
+        continue;
+      }
+      if (!res.ok) return null;
+      const buffer = await readCappedBinary(res, MAX_REFERENCE_IMAGE_BYTES);
+      if (!buffer) return null;
+      const contentType = res.headers.get("content-type") || "image/jpeg";
+      return { buffer, mimeType: contentType };
+    }
+    return null;
   } catch (err) {
     return null;
   }

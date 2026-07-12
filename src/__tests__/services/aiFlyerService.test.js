@@ -4,6 +4,17 @@ jest.mock("../../services/imageService", () => ({
   generateFullFlyer: (...args) => mockGenerateFullFlyer(...args),
 }));
 
+// fetchImageReference now validates every host through assertPublicHost
+// (real DNS lookups) before fetching — mocked here the same way
+// onboardingScraperService.test.js already mocks safeFetch, so these
+// tests don't depend on real network/DNS. Defaults to "safe"; individual
+// tests can override to simulate an unsafe/unresolvable host.
+const mockAssertPublicHost = jest.fn();
+jest.mock("../../services/urlSafetyService", () => {
+  const actual = jest.requireActual("../../services/urlSafetyService");
+  return { ...actual, assertPublicHost: (...a) => mockAssertPublicHost(...a) };
+});
+
 const sharp = require("sharp");
 const { generateAiFlyer, buildFullFlyerPrompt } = require("../../services/aiFlyerService");
 
@@ -13,6 +24,24 @@ const fakePng = async (width = 1080, height = 1350) =>
   })
     .png()
     .toBuffer();
+
+// A minimal web-standard ReadableStream-shaped body, matching what
+// fetchImageReference's readCappedBinary actually reads via getReader() —
+// the old flat `arrayBuffer()`-only mocks no longer exercise the real
+// code path.
+const fakeFetchBody = (buffer) => ({
+  getReader: () => {
+    let done = false;
+    return {
+      read: async () => {
+        if (done) return { done: true, value: undefined };
+        done = true;
+        return { done: false, value: new Uint8Array(buffer) };
+      },
+      cancel: async () => {},
+    };
+  },
+});
 
 describe("buildFullFlyerPrompt", () => {
   it("calls out phone number digit preservation in the contact line", () => {
@@ -301,6 +330,7 @@ describe("buildFullFlyerPrompt", () => {
 describe("generateAiFlyer", () => {
   beforeEach(() => {
     mockGenerateFullFlyer.mockReset();
+    mockAssertPublicHost.mockReset().mockResolvedValue(undefined);
     global.fetch = jest.fn().mockResolvedValue({
       ok: false, // no reference images fetched in these tests
     });
@@ -437,8 +467,9 @@ describe("generateAiFlyer", () => {
       const logoBuffer = await fakeLogoPng();
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        arrayBuffer: async () => logoBuffer.buffer.slice(logoBuffer.byteOffset, logoBuffer.byteOffset + logoBuffer.byteLength),
+        status: 200,
         headers: { get: () => "image/png" },
+        body: fakeFetchBody(logoBuffer),
       });
 
       const result = await generateAiFlyer({
@@ -467,8 +498,9 @@ describe("generateAiFlyer", () => {
       const logoBuffer = await fakeLogoPng();
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        arrayBuffer: async () => logoBuffer.buffer.slice(logoBuffer.byteOffset, logoBuffer.byteOffset + logoBuffer.byteLength),
+        status: 200,
         headers: { get: () => "image/png" },
+        body: fakeFetchBody(logoBuffer),
       });
 
       const result = await generateAiFlyer({
@@ -508,8 +540,9 @@ describe("generateAiFlyer", () => {
       const logoBuffer = await fakeLogoPng();
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        arrayBuffer: async () => logoBuffer.buffer.slice(logoBuffer.byteOffset, logoBuffer.byteOffset + logoBuffer.byteLength),
+        status: 200,
         headers: { get: () => "image/png" },
+        body: fakeFetchBody(logoBuffer),
       });
 
       const result = await generateAiFlyer({
@@ -556,6 +589,28 @@ describe("generateAiFlyer", () => {
         content: { title: "Worship Intensive" },
       });
 
+      expect(result.meta.has_logo).toBe(true);
+      expect(result.png.equals(basePng)).toBe(true);
+    });
+
+    // A guarded logo/host-photo/speaker-photo fetch is only meaningful if
+    // an unsafe host (a private/internal IP, the cloud metadata endpoint)
+    // is actually rejected before any request goes out — this proves
+    // fetchImageReference's SSRF guard is wired in, not just present but
+    // unused.
+    it("never fetches, and skips gracefully, when the logo URL's host isn't publicly routable", async () => {
+      const basePng = await fakePng();
+      mockGenerateFullFlyer.mockResolvedValue(basePng);
+      const { UrlSafetyError } = jest.requireActual("../../services/urlSafetyService");
+      mockAssertPublicHost.mockRejectedValue(new UrlSafetyError("That address isn't allowed"));
+      global.fetch = jest.fn();
+
+      const result = await generateAiFlyer({
+        branding: { logo_url: "http://169.254.169.254/latest/meta-data/", colors: {} },
+        content: { title: "Worship Intensive" },
+      });
+
+      expect(global.fetch).not.toHaveBeenCalled();
       expect(result.meta.has_logo).toBe(true);
       expect(result.png.equals(basePng)).toBe(true);
     });
