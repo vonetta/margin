@@ -2,6 +2,18 @@ const sharp = require("sharp");
 const { generateFullFlyer } = require("./imageService");
 const { generateQRBuffer } = require("./qrService");
 const { selectTypography, inferTone } = require("./typographyService");
+const { resolveColors, deriveColorVariants } = require("./layouts/shared");
+
+// Same color-variant math the template engine already uses (deriveColorVariants)
+// — every variant is mathematically rotated from the ministry's own brand
+// hues, so it's structurally impossible to drift off-brand. The AI engine
+// used to always render the literal, unvaried brand palette, which is
+// exactly why every flyer from the same ministry started looking the
+// same after a while. Picking a variant at random per generation gives
+// natural visual variety across successive flyers without ever touching
+// the underlying brand colors — same rotation, different generation.
+const COLOR_VARIANT_KEYS = ["brand", "triad", "complementary", "accent_swap"];
+const pickColorVariant = () => COLOR_VARIANT_KEYS[Math.floor(Math.random() * COLOR_VARIANT_KEYS.length)];
 
 const ASPECT_RATIO_BY_SIZE = {
   social: "4:5",
@@ -129,13 +141,20 @@ const LOGO_AREA = {
   margin: 0.05, // distance from the canvas edge, as a fraction of width
 };
 
-const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null, qrUrl = null }) => {
-  const colors = branding.colors || {};
+const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null, qrUrl = null, colorVariant = null }) => {
+  // colorVariant is chosen once by generateAiFlyer (see COLOR_VARIANT_KEYS
+  // above) and passed in here rather than randomized inline, so this
+  // function stays a pure, deterministic prompt builder — easy to test,
+  // and callers that don't care about variety (or existing callers that
+  // predate this) just get the plain, unrotated brand colors as before.
+  const resolvedColors = resolveColors(branding);
+  const variants = deriveColorVariants(resolvedColors);
+  const colors = (colorVariant && variants[colorVariant]) || resolvedColors;
   const palette = [
     colors.primary && `deep primary ${colors.primary}`,
     colors.accent && `accent ${colors.accent}`,
     colors.gold && `gold/foil accent ${colors.gold}`,
-    colors.background && `light background option ${colors.background}`,
+    colors.bg && `light background option ${colors.bg}`,
   ]
     .filter(Boolean)
     .join(", ");
@@ -322,7 +341,8 @@ const generateAiFlyer = async ({
   const toneSource = [content.title, content.subtitle, content.description].filter(Boolean).join(" ");
   const tone =
     resolvedTone !== undefined ? resolvedTone : inferTone(toneSource, typeSystem?.tone_keywords);
-  const prompt = buildFullFlyerPrompt({ branding, content, referenceImages, typeSystem, tone, qrUrl });
+  const colorVariant = pickColorVariant();
+  const prompt = buildFullFlyerPrompt({ branding, content, referenceImages, typeSystem, tone, qrUrl, colorVariant });
   const aspectRatio = ASPECT_RATIO_BY_SIZE[size] || ASPECT_RATIO_BY_SIZE.social;
 
   let png = await generateFullFlyer(prompt, referenceImages, { aspectRatio });
@@ -340,6 +360,7 @@ const generateAiFlyer = async ({
       engine: "ai",
       size,
       tone,
+      color_variant: colorVariant,
       has_logo: !!branding.logo_url,
       has_qr: !!qrUrl,
       reference_image_count: referenceImages.length,

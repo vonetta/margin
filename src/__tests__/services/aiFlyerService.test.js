@@ -41,6 +41,30 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("must never sit on top of or overlap any text");
   });
 
+  it("uses the plain, unrotated brand colors when no colorVariant is given", () => {
+    const prompt = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F", accent: "#E94560", gold: "#DAAE4F" } },
+      content: { title: "Pizza Party" },
+    });
+    expect(prompt).toContain("#03293F");
+    expect(prompt).toContain("#E94560");
+    expect(prompt).toContain("#DAAE4F");
+  });
+
+  it("rotates accent/gold (never primary) when a color_variant is given, staying derived from the real brand colors", () => {
+    const branding = { name: "KTM", colors: { primary: "#03293F", accent: "#E94560", gold: "#DAAE4F" } };
+    const plain = buildFullFlyerPrompt({ branding, content: { title: "Pizza Party" } });
+    const triad = buildFullFlyerPrompt({ branding, content: { title: "Pizza Party" }, colorVariant: "triad" });
+
+    // Primary is the anchor color and stays identical across every variant.
+    expect(triad).toContain("#03293F");
+    // Accent/gold get mathematically rehued, so the literal brand hex
+    // codes for those two should no longer appear verbatim.
+    expect(triad).not.toContain("#E94560");
+    expect(triad).not.toContain("#DAAE4F");
+    expect(plain).not.toBe(triad);
+  });
+
   it("includes exact event text and brand colors", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", colors: { primary: "#03293F", gold: "#DAAE4F" } },
@@ -295,6 +319,17 @@ describe("generateAiFlyer", () => {
     expect(result.meta).toEqual(
       expect.objectContaining({ engine: "ai", size: "social", has_qr: false }),
     );
+  });
+
+  it("picks a color_variant from the known set and includes it in meta", async () => {
+    mockGenerateFullFlyer.mockResolvedValue(await fakePng());
+
+    const result = await generateAiFlyer({
+      branding: { colors: { primary: "#03293F" } },
+      content: { title: "Worship Intensive" },
+    });
+
+    expect(["brand", "triad", "complementary", "accent_swap"]).toContain(result.meta.color_variant);
   });
 
   it("composites a real QR code onto the generated image when qrUrl is given", async () => {
