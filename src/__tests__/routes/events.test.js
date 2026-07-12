@@ -1,3 +1,12 @@
+// Defaults to rejecting, same as the real service does with no
+// ANTHROPIC_API_KEY configured — every existing test below exercises
+// the buildStaticSuggestions fallback path unless it explicitly
+// overrides this mock to resolve with AI-provided suggestions.
+const mockSuggestTasksForEvent = jest.fn().mockRejectedValue(new Error("no API key in tests"));
+jest.mock("../../services/taskSuggestionService", () => ({
+  suggestTasksForEvent: (...args) => mockSuggestTasksForEvent(...args),
+}));
+
 const request = require("supertest");
 const { connectTestDB } = require("../../testHelpers/db");
 const { registerMember } = require("../../testHelpers/register");
@@ -29,6 +38,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  mockSuggestTasksForEvent.mockReset().mockRejectedValue(new Error("no API key in tests"));
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
   await Flyer.deleteMany({ ministry_id: "ktm-test" });
@@ -274,6 +284,52 @@ describe("PUT /api/events/:id/approve and /reject", () => {
 });
 
 describe("GET /api/events/:id/suggested-tasks", () => {
+  it("returns the AI-suggested tasks when the suggestion service succeeds, not the static fallback", async () => {
+    mockSuggestTasksForEvent.mockResolvedValue([
+      { title: "Order pizza from Tony's", description: "Confirm headcount with the vendor.", due_date: new Date("2026-06-02T18:00:00Z") },
+      { title: "Set up game tables", due_date: new Date("2026-06-05T16:00:00Z") },
+    ]);
+    const event = await Event.create({
+      ministry_id: "ktm-test",
+      title: "Pizza Party",
+      start: new Date("2026-06-05T18:00:00Z"),
+      status: "approved",
+    });
+
+    const res = await request(app)
+      .get(`/api/events/${event._id}/suggested-tasks`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((s) => s.title)).toEqual(["Order pizza from Tony's", "Set up game tables"]);
+    expect(mockSuggestTasksForEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ event: expect.objectContaining({ title: "Pizza Party" }) }),
+    );
+  });
+
+  it("falls back to the static suggestions when the AI suggestion service throws", async () => {
+    mockSuggestTasksForEvent.mockRejectedValue(new Error("rate limited"));
+    const event = await Event.create({
+      ministry_id: "ktm-test",
+      title: "Worship Night",
+      start: new Date("2026-06-05T18:00:00Z"),
+      end: new Date("2026-06-05T20:00:00Z"),
+      status: "approved",
+    });
+
+    const res = await request(app)
+      .get(`/api/events/${event._id}/suggested-tasks`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((s) => s.title)).toEqual([
+      "Day-of setup for Worship Night",
+      "Thank-you / debrief for Worship Night",
+    ]);
+  });
+
   it("suggests day-of setup and thank-you tasks for an event with no linked flyer", async () => {
     const event = await Event.create({
       ministry_id: "ktm-test",

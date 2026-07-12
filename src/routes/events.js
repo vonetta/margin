@@ -3,8 +3,11 @@ const router = express.Router();
 const { body, query, validationResult } = require("express-validator");
 const Event = require("../models/Event");
 const Flyer = require("../models/Flyer");
+const Ministry = require("../models/Ministry");
 const { requireRole } = require("../middleware/auth");
+const { aiLimiter } = require("../middleware/rateLimiters");
 const { expandEvents, isValidRecurrenceRule, parseFlyerDate } = require("../services/calendarService");
+const { suggestTasksForEvent } = require("../services/taskSuggestionService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -212,52 +215,73 @@ router.put("/:id/reject", requireRole("admin", "leader"), async (req, res) => {
   }
 });
 
-// GET /api/events/:id/suggested-tasks — three generic, always-applicable
-// starter tasks for a newly-approved event. Nobody is guessed as the
-// assignee here; the frontend shows these in a review panel where a
-// human picks who each one goes to (or skips it) before anything is
-// actually created via the ordinary POST /api/tasks.
-router.get("/:id/suggested-tasks", requireRole("admin", "leader"), async (req, res) => {
+// Three generic, always-applicable starter tasks — the original
+// suggested-tasks behavior, kept as a safety net for when the AI
+// suggestion call fails (no API key, rate limit, malformed response) or
+// the event has too little content to ground a real suggestion in.
+const buildStaticSuggestions = (event, flyer) => {
+  const suggestions = [
+    {
+      title: `Day-of setup for ${event.title}`,
+      description: "Prep the space and any equipment before the event starts.",
+      due_date: event.start,
+    },
+  ];
+
+  // Prefer rsvp_by_raw (the exact picker value, stored alongside the
+  // formatted display string since the raw-storage fix) over re-parsing
+  // content.rsvp_by's already-formatted free text — that round-trip
+  // through chrono was the lossy path this field exists to avoid. Only
+  // falls back to parsing for flyers generated before that fix, which
+  // have no raw field.
+  const rsvpByRaw = flyer?.content?.rsvp_by_raw;
+  const rsvpBy = flyer?.content?.rsvp_by;
+  if (rsvpByRaw || rsvpBy) {
+    const dueDate = rsvpByRaw ? new Date(rsvpByRaw) : parseFlyerDate(rsvpBy)?.start || null;
+    suggestions.push({
+      title: `RSVP follow-up for ${event.title}`,
+      description: "Follow up with anyone who hasn't RSVP'd yet.",
+      due_date: dueDate,
+    });
+  }
+
+  const debriefAnchor = event.end || event.start;
+  suggestions.push({
+    title: `Thank-you / debrief for ${event.title}`,
+    description: "Send thank-yous and debrief what worked and what didn't.",
+    due_date: new Date(debriefAnchor.getTime() + 2 * 24 * 60 * 60 * 1000),
+  });
+
+  return suggestions;
+};
+
+// GET /api/events/:id/suggested-tasks — tailored to this actual event
+// (its title, description, location, and linked flyer's audience/cost/
+// highlights) via suggestTasksForEvent, rather than the same three
+// generic strings for every event regardless of what it actually is.
+// Falls back to buildStaticSuggestions on any AI failure — this must
+// never block the approval flow just because the AI call had a bad day.
+// Nobody is guessed as the assignee either way; the frontend shows these
+// in a review panel where a human picks who each one goes to (or skips
+// it) before anything is actually created via the ordinary POST
+// /api/tasks.
+router.get("/:id/suggested-tasks", requireRole("admin", "leader"), aiLimiter, async (req, res) => {
   try {
     const event = await Event.findOne({ _id: req.params.id, ministry_id: req.ministryId });
     if (!event) return res.status(404).json({ error: "Event not found" });
 
-    const suggestions = [
-      {
-        title: `Day-of setup for ${event.title}`,
-        description: "Prep the space and any equipment before the event starts.",
-        due_date: event.start,
-      },
-    ];
+    const flyer = event.flyer_id
+      ? await Flyer.findOne({ _id: event.flyer_id, ministry_id: req.ministryId })
+      : null;
 
-    if (event.flyer_id) {
-      const flyer = await Flyer.findOne({ _id: event.flyer_id, ministry_id: req.ministryId });
-      // Prefer rsvp_by_raw (the exact picker value, stored alongside the
-      // formatted display string since the raw-storage fix) over
-      // re-parsing content.rsvp_by's already-formatted free text — that
-      // round-trip through chrono was the lossy path this field exists
-      // to avoid. Only falls back to parsing for flyers generated before
-      // that fix, which have no raw field.
-      const rsvpByRaw = flyer?.content?.rsvp_by_raw;
-      const rsvpBy = flyer?.content?.rsvp_by;
-      if (rsvpByRaw || rsvpBy) {
-        const dueDate = rsvpByRaw ? new Date(rsvpByRaw) : parseFlyerDate(rsvpBy)?.start || null;
-        suggestions.push({
-          title: `RSVP follow-up for ${event.title}`,
-          description: "Follow up with anyone who hasn't RSVP'd yet.",
-          due_date: dueDate,
-        });
-      }
+    try {
+      const ministry = await Ministry.findOne({ ministry_id: req.ministryId });
+      const suggestions = await suggestTasksForEvent({ event, flyer, ministry });
+      return res.json(suggestions);
+    } catch (aiError) {
+      console.error("AI suggested-tasks failed, falling back to static suggestions:", aiError);
+      return res.json(buildStaticSuggestions(event, flyer));
     }
-
-    const debriefAnchor = event.end || event.start;
-    suggestions.push({
-      title: `Thank-you / debrief for ${event.title}`,
-      description: "Send thank-yous and debrief what worked and what didn't.",
-      due_date: new Date(debriefAnchor.getTime() + 2 * 24 * 60 * 60 * 1000),
-    });
-
-    res.json(suggestions);
   } catch (error) {
     console.error("Suggested tasks error:", error);
     res.status(500).json({ error: "Failed to compute suggested tasks" });
