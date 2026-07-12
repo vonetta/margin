@@ -296,6 +296,32 @@ describe("GET /api/events/:id/suggested-tasks", () => {
     expect(new Date(res.body[0].due_date).toISOString()).toBe(event.start.toISOString());
   });
 
+  it("uses rsvp_by_raw (the exact picker value) for the RSVP follow-up due date when present, not a re-parse of the formatted string", async () => {
+    const flyer = await Flyer.create({
+      ministry_id: "ktm-test",
+      title: "Worship Night Flyer",
+      layout: "monument",
+      content: { rsvp_by: "Wednesday, June 3, 2026", rsvp_by_raw: "2026-06-03" },
+    });
+    const event = await Event.create({
+      ministry_id: "ktm-test",
+      title: "Worship Night",
+      start: new Date("2026-06-05T18:00:00Z"),
+      status: "approved",
+      source: "flyer",
+      flyer_id: flyer._id.toString(),
+    });
+
+    const res = await request(app)
+      .get(`/api/events/${event._id}/suggested-tasks`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    const rsvpTask = res.body.find((s) => s.title === "RSVP follow-up for Worship Night");
+    expect(new Date(rsvpTask.due_date).toISOString()).toBe(new Date("2026-06-03").toISOString());
+  });
+
   it("includes an RSVP follow-up only when the linked flyer has an rsvp_by", async () => {
     const flyer = await Flyer.create({
       ministry_id: "ktm-test",

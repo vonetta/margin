@@ -232,13 +232,20 @@ router.get("/:id/suggested-tasks", requireRole("admin", "leader"), async (req, r
 
     if (event.flyer_id) {
       const flyer = await Flyer.findOne({ _id: event.flyer_id, ministry_id: req.ministryId });
+      // Prefer rsvp_by_raw (the exact picker value, stored alongside the
+      // formatted display string since the raw-storage fix) over
+      // re-parsing content.rsvp_by's already-formatted free text — that
+      // round-trip through chrono was the lossy path this field exists
+      // to avoid. Only falls back to parsing for flyers generated before
+      // that fix, which have no raw field.
+      const rsvpByRaw = flyer?.content?.rsvp_by_raw;
       const rsvpBy = flyer?.content?.rsvp_by;
-      if (rsvpBy) {
-        const parsed = parseFlyerDate(rsvpBy);
+      if (rsvpByRaw || rsvpBy) {
+        const dueDate = rsvpByRaw ? new Date(rsvpByRaw) : parseFlyerDate(rsvpBy)?.start || null;
         suggestions.push({
           title: `RSVP follow-up for ${event.title}`,
           description: "Follow up with anyone who hasn't RSVP'd yet.",
-          due_date: parsed?.start || null,
+          due_date: dueDate,
         });
       }
     }
