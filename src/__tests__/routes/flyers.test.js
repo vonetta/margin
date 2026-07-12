@@ -558,6 +558,99 @@ describe("plan limits on POST /api/flyers/generate", () => {
   });
 });
 
+describe("PUT /api/flyers/:id/generate", () => {
+  it("regenerates the same flyer document in place instead of creating a new one", async () => {
+    const created = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Party", date: "2026-07-18" });
+    expect(created.status).toBe(201);
+    const flyerId = created.body._id;
+
+    const res = await request(app)
+      .put(`/api/flyers/${flyerId}/generate`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Party (Updated)", date: "2026-07-25" });
+
+    expect(res.status).toBe(200);
+    expect(res.body._id).toBe(flyerId);
+    expect(res.body.title).toBe("Pizza Party (Updated)");
+    expect(res.body.content.date_raw).toBe("2026-07-25");
+
+    const allFlyers = await Flyer.find({ ministry_id: "ktm-test" });
+    expect(allFlyers.length).toBe(1);
+  });
+
+  it("deletes the old storage files once the new ones are uploaded", async () => {
+    const { safeDeleteFile } = require("../../services/storageService");
+    safeDeleteFile.mockClear();
+
+    const created = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Party", date: "2026-07-18" });
+    const flyerId = created.body._id;
+    const oldSocialKey = created.body.social_key;
+
+    await request(app)
+      .put(`/api/flyers/${flyerId}/generate`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Party (Updated)", date: "2026-07-25" });
+
+    expect(safeDeleteFile).toHaveBeenCalledWith(oldSocialKey);
+  });
+
+  it("updates the flyer's already-linked pending event instead of creating a duplicate", async () => {
+    const created = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Party", date: "2026-07-18" });
+    const flyerId = created.body._id;
+
+    const eventsBefore = await Event.find({ ministry_id: "ktm-test", flyer_id: flyerId });
+    expect(eventsBefore.length).toBe(1);
+
+    await request(app)
+      .put(`/api/flyers/${flyerId}/generate`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Party (Updated)", date: "2026-07-25" });
+
+    const eventsAfter = await Event.find({ ministry_id: "ktm-test", flyer_id: flyerId });
+    expect(eventsAfter.length).toBe(1);
+    expect(eventsAfter[0].title).toBe("Pizza Party (Updated)");
+  });
+
+  it("404s for a flyer that doesn't exist in this ministry", async () => {
+    const res = await request(app)
+      .put("/api/flyers/000000000000000000000000/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Anything" });
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects a team member (requires admin/leader)", async () => {
+    const created = await request(app)
+      .post("/api/flyers/generate")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ title: "Pizza Party", date: "2026-07-18" });
+
+    const res = await request(app)
+      .put(`/api/flyers/${created.body._id}/generate`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({ title: "Should fail" });
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("POST /api/flyers/background-preview", () => {
   it("generates and stores one candidate image without attaching it to a flyer", async () => {
     const res = await request(app)

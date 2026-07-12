@@ -114,38 +114,272 @@ router.get("/", async (req, res) => {
   }
 });
 
+const generateValidators = [
+  body("title").trim().notEmpty().withMessage("Title is required"),
+  body("layout").optional().trim(),
+  body("host_id").optional().trim(),
+  body("speaker_ids")
+    .optional()
+    .isArray()
+    .withMessage("speaker_ids must be an array"),
+  body("qr_url").optional().trim(),
+  body("theme_tags")
+    .optional()
+    .isArray()
+    .withMessage("theme_tags must be an array"),
+  body("highlights")
+    .optional()
+    .isArray()
+    .withMessage("highlights must be an array"),
+  body("platform").optional().trim(),
+  body("background_url").optional().trim(),
+  body("engine").optional().isIn(["template", "ai"]).withMessage("Invalid engine"),
+  body("tone").optional().trim(),
+  body("kicker").optional().trim(),
+  body("time").optional().trim(),
+  body("end_time").optional().trim(),
+  body("rsvp_by").optional().trim(),
+  body("contact").optional().trim(),
+];
+
+// Only ever the exact shape a native <input type="date">/type="time"> can
+// round-trip (bare YYYY-MM-DD / HH:MM) — never AI-drafted free text like
+// "next Friday", which formatFriendlyDate/Time already pass through
+// unchanged rather than reformat. Reusing that same "does this look like
+// a bare picker value" check here keeps this storage honest: something a
+// raw_* value couldn't safely repopulate a picker with just doesn't get
+// stored, so an edit later either gets a real usable value or the
+// existing blank-with-a-note fallback — never a raw_* value that
+// silently fails to populate.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_TIME_RE = /^\d{2}:\d{2}$/;
+const asRawDate = (v) => (ISO_DATE_RE.test(v || "") ? v : undefined);
+const asRawTime = (v) => (ISO_TIME_RE.test(v || "") ? v : undefined);
+
+// Everything POST /generate and PUT /:id/generate share: resolve
+// branding/roster context, build the content object, run the actual
+// image generation, and upload the result(s) to storage. Returns the
+// fields to persist (minus ministry_id/created_by, which differ between
+// a fresh Flyer.create and an existing document's findOneAndUpdate) plus
+// the raw event-relevant fields the caller needs for its own best-effort
+// calendar-event bookkeeping.
+const buildFlyerAssets = async (req) => {
+  const {
+    title,
+    subtitle,
+    description,
+    theme_tags,
+    highlights,
+    audience,
+    date,
+    time,
+    end_time,
+    location,
+    cost,
+    cta,
+    qr_url,
+    host_id,
+    speaker_ids = [],
+    layout,
+    platform,
+    background_url,
+    engine = "template",
+    tone,
+    kicker,
+    rsvp_by,
+    contact,
+  } = req.body;
+
+  // Always clamped to safe ranges regardless of where it came from — an
+  // AI-proposed value from the chat, a manual override from the
+  // customization wizard, or a raw API call.
+  const style = validateStyle(req.body.style);
+
+  const ministry = await Ministry.findOne({ ministry_id: req.ministryId });
+  const aiProfile = await AiProfile.findOne({ ministry_id: req.ministryId });
+  const typeSystem = aiProfile?.type_system || null;
+
+  // Re-clamped here regardless of where `tone` came from (the chat step
+  // already resolved it once, but the ministry's own categories could
+  // have changed since, or this could be a raw API call) — resolveTone
+  // can never return anything the ministry hasn't actually defined.
+  // Undefined when no tone was sent at all, so generateFlyer falls
+  // through to its normal keyword inference — distinct from `null`,
+  // which would mean "AI looked and found no match, don't infer further."
+  const resolvedTone =
+    tone !== undefined ? resolveTone(tone, typeSystem?.tone_keywords) : undefined;
+
+  let host = null;
+  if (host_id) {
+    host = await Person.findOne({ _id: host_id, ministry_id: req.ministryId });
+  }
+  let speakers = [];
+  if (speaker_ids.length) {
+    speakers = await Person.find({ _id: { $in: speaker_ids }, ministry_id: req.ministryId });
+  }
+
+  const content = {
+    title,
+    subtitle,
+    kicker,
+    description,
+    theme_tags,
+    highlights,
+    audience,
+    date: formatFriendlyDateTime(date, time, end_time),
+    // date_raw/time_raw/end_time_raw/rsvp_by_raw: the exact picker
+    // values behind the formatted display strings above, kept only so
+    // editing this flyer later (see routes handleEditFlyer client-side)
+    // can repopulate the date/time inputs instead of leaving them
+    // blank. Purely additive — nothing reads content.date from these.
+    date_raw: asRawDate(date),
+    time_raw: asRawTime(time),
+    end_time_raw: asRawTime(end_time),
+    location,
+    cost,
+    cta,
+    rsvp_by: formatFriendlyDate(rsvp_by),
+    rsvp_by_raw: asRawDate(rsvp_by),
+    contact,
+    qr_caption: req.body.qr_caption,
+  };
+
+  const baseArgs = {
+    content,
+    branding: ministry?.branding || {},
+    typeSystem,
+    qrUrl: qr_url || null,
+    host,
+    speakers,
+    layout: layout || null,
+    style,
+    resolvedTone,
+    ministryId: req.ministryId,
+    platform: platform || null,
+    backgroundUrl: background_url || null,
+  };
+
+  let fields;
+
+  if (engine === "ai") {
+    // A single full-image generation, not layout-driven — there's no
+    // print size here since that would mean a second, independently
+    // generated image (double the cost, different composition) rather
+    // than a resize of the same one.
+    const social = await generateAiFlyer({
+      branding: ministry?.branding || {},
+      content,
+      host,
+      speakers,
+      qrUrl: qr_url || null,
+      size: "social",
+      typeSystem,
+      resolvedTone,
+    });
+
+    const socialUp = await uploadFile({
+      ministryId: req.ministryId,
+      category: "flyers",
+      buffer: social.png,
+      contentType: "image/png",
+      originalName: `${title}-social-ai`,
+    });
+
+    fields = {
+      title,
+      layout: "ai",
+      engine: "ai",
+      social_url: socialUp.url,
+      social_key: socialUp.key,
+      print_url: null,
+      print_key: null,
+      content,
+      host_id: host_id || null,
+      speaker_ids,
+      background_id: null,
+      qr_url: qr_url || null,
+    };
+  } else {
+    // Generate both sizes
+    const social = await generateFlyer({ ...baseArgs, size: "social" });
+    const print = await generateFlyer({
+      ...baseArgs,
+      size: "print",
+      backgroundUrl: null,
+    });
+
+    // Save both to R2
+    const socialUp = await uploadFile({
+      ministryId: req.ministryId,
+      category: "flyers",
+      buffer: social.png,
+      contentType: "image/png",
+      originalName: `${title}-social`,
+    });
+    const printUp = await uploadFile({
+      ministryId: req.ministryId,
+      category: "flyers",
+      buffer: print.png,
+      contentType: "image/png",
+      originalName: `${title}-print`,
+    });
+
+    fields = {
+      title,
+      layout: social.meta.layout,
+      engine: "template",
+      tone: social.meta.tone,
+      social_url: socialUp.url,
+      social_key: socialUp.key,
+      print_url: printUp.url,
+      print_key: printUp.key,
+      content,
+      host_id: host_id || null,
+      speaker_ids,
+      background_id: social.meta.background_id || null,
+      qr_url: qr_url || null,
+    };
+  }
+
+  return { fields, title, description, location, date, time, end_time };
+};
+
+// Best-effort: get the event onto the calendar as something a human
+// confirms, rather than requiring it be entered a second time by hand. A
+// date that fails to parse just means no calendar entry — it never
+// blocks the flyer itself. Folding time into the same string chrono
+// parses means the calendar entry gets a real start/end instead of
+// always landing at midnight.
+const createPendingCalendarEvent = async (req, { flyer, title, description, location, date, time, end_time }) => {
+  const parsedDate = parseFlyerDate(
+    date && time ? `${date} ${time}${end_time ? ` to ${end_time}` : ""}` : date,
+  );
+  if (!parsedDate) return;
+  try {
+    const pendingEvent = await Event.create({
+      ministry_id: req.ministryId,
+      title,
+      description: description || undefined,
+      location: location || undefined,
+      start: parsedDate.start,
+      end: parsedDate.end || undefined,
+      status: "pending",
+      source: "flyer",
+      flyer_id: flyer._id.toString(),
+      created_by: req.userId,
+    });
+    await notifyEventPendingApproval({ ministryId: req.ministryId, event: pendingEvent });
+  } catch (eventError) {
+    console.error("Auto calendar event creation failed:", eventError);
+  }
+};
+
 // POST /api/flyers/generate — the main event
 router.post(
   "/generate",
   requireRole("admin", "leader"),
   aiLimiter,
-  [
-    body("title").trim().notEmpty().withMessage("Title is required"),
-    body("layout").optional().trim(),
-    body("host_id").optional().trim(),
-    body("speaker_ids")
-      .optional()
-      .isArray()
-      .withMessage("speaker_ids must be an array"),
-    body("qr_url").optional().trim(),
-    body("theme_tags")
-      .optional()
-      .isArray()
-      .withMessage("theme_tags must be an array"),
-    body("highlights")
-      .optional()
-      .isArray()
-      .withMessage("highlights must be an array"),
-    body("platform").optional().trim(),
-    body("background_url").optional().trim(),
-    body("engine").optional().isIn(["template", "ai"]).withMessage("Invalid engine"),
-    body("tone").optional().trim(),
-    body("kicker").optional().trim(),
-    body("time").optional().trim(),
-    body("end_time").optional().trim(),
-    body("rsvp_by").optional().trim(),
-    body("contact").optional().trim(),
-  ],
+  generateValidators,
   validate,
   async (req, res) => {
     try {
@@ -157,243 +391,91 @@ router.post(
         return res.status(402).json({ error: planLimitError("flyers_per_month", req.ministry.plan) });
       }
 
-      const {
-        title,
-        subtitle,
-        description,
-        theme_tags,
-        highlights,
-        audience,
-        date,
-        time,
-        end_time,
-        location,
-        cost,
-        cta,
-        qr_url,
-        host_id,
-        speaker_ids = [],
-        layout,
-        platform,
-        background_url,
-        engine = "template",
-        tone,
-        kicker,
-        rsvp_by,
-        contact,
-      } = req.body;
+      const { fields, title, description, location, date, time, end_time } = await buildFlyerAssets(req);
 
-      // Always clamped to safe ranges regardless of where it came from —
-      // an AI-proposed value from the chat, a manual override from the
-      // customization wizard, or a raw API call.
-      const style = validateStyle(req.body.style);
-
-      // Resolve ministry branding + type system
-      const ministry = await Ministry.findOne({ ministry_id: req.ministryId });
-      const aiProfile = await AiProfile.findOne({
+      const flyer = await Flyer.create({
         ministry_id: req.ministryId,
+        ...fields,
+        created_by: req.userId,
       });
-      const typeSystem = aiProfile?.type_system || null;
 
-      // Re-clamped here regardless of where `tone` came from (the chat
-      // step already resolved it once, but the ministry's own categories
-      // could have changed since, or this could be a raw API call) —
-      // resolveTone can never return anything the ministry hasn't
-      // actually defined. Undefined when no tone was sent at all, so
-      // generateFlyer falls through to its normal keyword inference —
-      // distinct from `null`, which would mean "AI looked and found no
-      // match, don't infer further."
-      const resolvedTone =
-        tone !== undefined ? resolveTone(tone, typeSystem?.tone_keywords) : undefined;
-
-      // Resolve people from the roster
-      let host = null;
-      if (host_id) {
-        host = await Person.findOne({
-          _id: host_id,
-          ministry_id: req.ministryId,
-        });
-      }
-      let speakers = [];
-      if (speaker_ids.length) {
-        speakers = await Person.find({
-          _id: { $in: speaker_ids },
-          ministry_id: req.ministryId,
-        });
-      }
-
-      // Only ever the exact shape a native <input type="date">/type="time">
-      // can round-trip (bare YYYY-MM-DD / HH:MM) — never AI-drafted free
-      // text like "next Friday", which formatFriendlyDate/Time already
-      // pass through unchanged rather than reformat. Reusing that same
-      // "does this look like a bare picker value" check here keeps this
-      // storage honest: something a raw_* field couldn't safely repopulate
-      // a picker with just doesn't get stored, so an edit later either
-      // gets a real usable value or the existing blank-with-a-note
-      // fallback — never a raw_* value that silently fails to populate.
-      const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-      const ISO_TIME_RE = /^\d{2}:\d{2}$/;
-      const asRawDate = (v) => (ISO_DATE_RE.test(v || "") ? v : undefined);
-      const asRawTime = (v) => (ISO_TIME_RE.test(v || "") ? v : undefined);
-
-      const content = {
-        title,
-        subtitle,
-        kicker,
-        description,
-        theme_tags,
-        highlights,
-        audience,
-        date: formatFriendlyDateTime(date, time, end_time),
-        // date_raw/time_raw/end_time_raw/rsvp_by_raw: the exact picker
-        // values behind the formatted display strings above, kept only so
-        // editing this flyer later (see routes handleEditFlyer client-side)
-        // can repopulate the date/time inputs instead of leaving them
-        // blank. Purely additive — nothing reads content.date from these.
-        date_raw: asRawDate(date),
-        time_raw: asRawTime(time),
-        end_time_raw: asRawTime(end_time),
-        location,
-        cost,
-        cta,
-        rsvp_by: formatFriendlyDate(rsvp_by),
-        rsvp_by_raw: asRawDate(rsvp_by),
-        contact,
-        qr_caption: req.body.qr_caption,
-      };
-
-      const baseArgs = {
-        content,
-        branding: ministry?.branding || {},
-        typeSystem,
-        qrUrl: qr_url || null,
-        host,
-        speakers,
-        layout: layout || null,
-        style,
-        resolvedTone,
-        ministryId: req.ministryId,
-        platform: platform || null,
-        backgroundUrl: background_url || null,
-      };
-
-      let flyer;
-
-      if (engine === "ai") {
-        // A single full-image generation, not layout-driven — there's no
-        // print size here since that would mean a second, independently
-        // generated image (double the cost, different composition) rather
-        // than a resize of the same one.
-        const social = await generateAiFlyer({
-          branding: ministry?.branding || {},
-          content,
-          host,
-          speakers,
-          qrUrl: qr_url || null,
-          size: "social",
-          typeSystem,
-          resolvedTone,
-        });
-
-        const socialUp = await uploadFile({
-          ministryId: req.ministryId,
-          category: "flyers",
-          buffer: social.png,
-          contentType: "image/png",
-          originalName: `${title}-social-ai`,
-        });
-
-        flyer = await Flyer.create({
-          ministry_id: req.ministryId,
-          title,
-          layout: "ai",
-          engine: "ai",
-          social_url: socialUp.url,
-          social_key: socialUp.key,
-          content,
-          host_id: host_id || null,
-          speaker_ids,
-          qr_url: qr_url || null,
-          created_by: req.userId,
-        });
-      } else {
-        // Generate both sizes
-        const social = await generateFlyer({ ...baseArgs, size: "social" });
-        const print = await generateFlyer({
-          ...baseArgs,
-          size: "print",
-          backgroundUrl: null,
-        });
-
-        // Save both to R2
-        const socialUp = await uploadFile({
-          ministryId: req.ministryId,
-          category: "flyers",
-          buffer: social.png,
-          contentType: "image/png",
-          originalName: `${title}-social`,
-        });
-        const printUp = await uploadFile({
-          ministryId: req.ministryId,
-          category: "flyers",
-          buffer: print.png,
-          contentType: "image/png",
-          originalName: `${title}-print`,
-        });
-
-        // Store the record
-        flyer = await Flyer.create({
-          ministry_id: req.ministryId,
-          title,
-          layout: social.meta.layout,
-          engine: "template",
-          tone: social.meta.tone,
-          social_url: socialUp.url,
-          social_key: socialUp.key,
-          print_url: printUp.url,
-          print_key: printUp.key,
-          content,
-          host_id: host_id || null,
-          speaker_ids,
-          background_id: social.meta.background_id || null,
-          qr_url: qr_url || null,
-          created_by: req.userId,
-        });
-      }
-
-      // Best-effort: get the event onto the calendar as something a human
-      // confirms, rather than requiring it be entered a second time by
-      // hand. A date that fails to parse just means no calendar entry —
-      // it never blocks the flyer itself from being created. Folding time
-      // into the same string chrono parses means the calendar entry gets
-      // a real start/end instead of always landing at midnight.
-      const parsedDate = parseFlyerDate(
-        date && time ? `${date} ${time}${end_time ? ` to ${end_time}` : ""}` : date,
-      );
-      if (parsedDate) {
-        try {
-          const pendingEvent = await Event.create({
-            ministry_id: req.ministryId,
-            title,
-            description: description || undefined,
-            location: location || undefined,
-            start: parsedDate.start,
-            end: parsedDate.end || undefined,
-            status: "pending",
-            source: "flyer",
-            flyer_id: flyer._id.toString(),
-            created_by: req.userId,
-          });
-          await notifyEventPendingApproval({ ministryId: req.ministryId, event: pendingEvent });
-        } catch (eventError) {
-          console.error("Auto calendar event creation failed:", eventError);
-        }
-      }
+      await createPendingCalendarEvent(req, { flyer, title, description, location, date, time, end_time });
 
       res.status(201).json(flyer);
     } catch (error) {
       console.error("Flyer generation error:", error);
       res.status(500).json({ error: "Failed to generate flyer" });
+    }
+  },
+);
+
+// PUT /api/flyers/:id/generate — regenerates an existing flyer IN PLACE
+// (same document, same _id) instead of always creating a new one.
+// FlyerGenerator.js's "Edit" flow uses this so tweaking and re-running a
+// past flyer actually edits it, rather than leaving a trail of near-
+// duplicate flyers in history every time someone reuses one as a
+// starting point. Still counts against the monthly generation quota —
+// each call is a real image-generation cost regardless of whether the
+// result replaces an existing document or creates a new one. The old
+// social/print images are deleted from storage once the new ones are
+// confirmed uploaded, so this doesn't leak orphaned files.
+router.put(
+  "/:id/generate",
+  requireRole("admin", "leader"),
+  aiLimiter,
+  generateValidators,
+  validate,
+  async (req, res) => {
+    try {
+      const existing = await Flyer.findOne({ _id: req.params.id, ministry_id: req.ministryId });
+      if (!existing) return res.status(404).json({ error: "Flyer not found" });
+
+      const flyersThisMonth = await Flyer.countDocuments({
+        ministry_id: req.ministryId,
+        created_at: { $gte: startOfMonth() },
+      });
+      if (flyersThisMonth >= limitsFor(req.ministry.plan).flyers_per_month) {
+        return res.status(402).json({ error: planLimitError("flyers_per_month", req.ministry.plan) });
+      }
+
+      const { fields, title, description, location, date, time, end_time } = await buildFlyerAssets(req);
+
+      const flyer = await Flyer.findOneAndUpdate(
+        { _id: existing._id, ministry_id: req.ministryId },
+        { $set: fields },
+        { new: true },
+      );
+
+      // buildFlyerAssets always produces a fresh upload, so the previous
+      // files are unconditionally stale now — not worth comparing keys.
+      for (const key of [existing.social_key, existing.print_key]) {
+        if (key) await safeDeleteFile(key);
+      }
+
+      // The event this flyer already auto-created (if any) gets its
+      // date/title/location refreshed to match rather than getting a
+      // second, duplicate pending event — same source flyer, one event.
+      const linkedEvent = await Event.findOne({ ministry_id: req.ministryId, flyer_id: flyer._id.toString() });
+      if (linkedEvent) {
+        const parsedDate = parseFlyerDate(
+          date && time ? `${date} ${time}${end_time ? ` to ${end_time}` : ""}` : date,
+        );
+        if (parsedDate) {
+          linkedEvent.title = title;
+          linkedEvent.description = description || undefined;
+          linkedEvent.location = location || undefined;
+          linkedEvent.start = parsedDate.start;
+          linkedEvent.end = parsedDate.end || undefined;
+          await linkedEvent.save().catch((err) => console.error("Linked event update failed:", err));
+        }
+      } else {
+        await createPendingCalendarEvent(req, { flyer, title, description, location, date, time, end_time });
+      }
+
+      res.json(flyer);
+    } catch (error) {
+      console.error("Flyer regeneration error:", error);
+      res.status(500).json({ error: "Failed to regenerate flyer" });
     }
   },
 );
