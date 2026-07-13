@@ -4,6 +4,8 @@ const { body, query, validationResult } = require("express-validator");
 const Event = require("../models/Event");
 const Flyer = require("../models/Flyer");
 const Ministry = require("../models/Ministry");
+const Task = require("../models/Task");
+const User = require("../models/User");
 const { requireRole } = require("../middleware/auth");
 const { aiLimiter } = require("../middleware/rateLimiters");
 const { expandEvents, isValidRecurrenceRule, parseFlyerDate } = require("../services/calendarService");
@@ -276,7 +278,24 @@ router.get("/:id/suggested-tasks", requireRole("admin", "leader"), aiLimiter, as
 
     try {
       const ministry = await Ministry.findOne({ ministry_id: req.ministryId });
-      const suggestions = await suggestTasksForEvent({ event, flyer, ministry });
+
+      // Only completed tasks count as real evidence of "who actually
+      // does this kind of work" — an open/on-hold assignment doesn't
+      // prove anyone did anything. Capped and sorted newest-first so a
+      // long-running ministry's history stays bounded and recency-
+      // weighted rather than growing the prompt unbounded.
+      const pastTasks = await Task.find({ ministry_id: req.ministryId, status: "done" })
+        .sort({ completed_at: -1 })
+        .limit(200)
+        .select("title assigned_to group_id");
+
+      const activeUsers = await User.find({
+        "ministries.ministry_id": req.ministryId,
+        is_active: true,
+      }).select("name");
+      const activeMembers = activeUsers.map((u) => ({ id: u._id.toString(), name: u.name }));
+
+      const suggestions = await suggestTasksForEvent({ event, flyer, ministry, pastTasks, activeMembers });
       return res.json(suggestions);
     } catch (aiError) {
       console.error("AI suggested-tasks failed, falling back to static suggestions:", aiError);

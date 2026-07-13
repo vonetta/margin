@@ -15,6 +15,7 @@ const Ministry = require("../../models/Ministry");
 const Event = require("../../models/Event");
 const Flyer = require("../../models/Flyer");
 const User = require("../../models/User");
+const Task = require("../../models/Task");
 
 const testMinistry = {
   ministry_id: "ktm-test",
@@ -32,6 +33,7 @@ afterAll(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
   await Flyer.deleteMany({ ministry_id: "ktm-test" });
+  await Task.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["events-admin@ktm.com", "events-team@ktm.com"] },
   });
@@ -42,6 +44,7 @@ beforeEach(async () => {
   await Ministry.deleteMany({ ministry_id: "ktm-test" });
   await Event.deleteMany({ ministry_id: "ktm-test" });
   await Flyer.deleteMany({ ministry_id: "ktm-test" });
+  await Task.deleteMany({ ministry_id: "ktm-test" });
   await User.deleteMany({
     email: { $in: ["events-admin@ktm.com", "events-team@ktm.com"] },
   });
@@ -306,6 +309,34 @@ describe("GET /api/events/:id/suggested-tasks", () => {
     expect(mockSuggestTasksForEvent).toHaveBeenCalledWith(
       expect.objectContaining({ event: expect.objectContaining({ title: "Pizza Party" }) }),
     );
+  });
+
+  it("passes this ministry's completed task history and active roster to the suggestion service", async () => {
+    mockSuggestTasksForEvent.mockResolvedValue([{ title: "Anything", due_date: new Date("2026-06-05T18:00:00Z") }]);
+    const adminUser = await User.findOne({ email: "events-admin@ktm.com" });
+    await Task.create({
+      ministry_id: "ktm-test",
+      title: "Order pizza for youth night",
+      assigned_to: adminUser._id.toString(),
+      assigned_by: adminUser._id.toString(),
+      status: "done",
+      completed_at: new Date("2026-05-01T00:00:00Z"),
+    });
+    const event = await Event.create({
+      ministry_id: "ktm-test",
+      title: "Pizza Party",
+      start: new Date("2026-06-05T18:00:00Z"),
+      status: "approved",
+    });
+
+    await request(app)
+      .get(`/api/events/${event._id}/suggested-tasks`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    const callArgs = mockSuggestTasksForEvent.mock.calls[0][0];
+    expect(callArgs.pastTasks.map((t) => t.title)).toContain("Order pizza for youth night");
+    expect(callArgs.activeMembers.some((m) => m.name === "A")).toBe(true);
   });
 
   it("falls back to the static suggestions when the AI suggestion service throws", async () => {
