@@ -303,6 +303,7 @@ router.put(
     body("description").optional().trim(),
     body("due_date").optional().isISO8601(),
     body("assigned_to").optional().trim().notEmpty(),
+    body("completion_notes").optional().trim(),
     body("recurrence_rule")
       .optional({ nullable: true })
       .trim()
@@ -405,48 +406,54 @@ router.post(
 // expanding occurrences virtually the way Calendar events do — a task
 // carries real per-occurrence state (who it ended up assigned to) that
 // only makes sense once the prior occurrence is actually done.
-router.put("/:id/complete", async (req, res) => {
-  try {
-    const task = await Task.findOne({ _id: req.params.id, ministry_id: req.ministryId });
-    if (!task) return res.status(404).json({ error: "Task not found" });
-    if (!canManage(req, task)) {
-      return res.status(403).json({ error: "Insufficient permissions" });
-    }
-    task.status = "done";
-    task.completed_at = new Date();
-    task.hold_reason = undefined;
-    await task.save();
-
-    // Each person's row rolls forward independently the moment THEY
-    // finish — there's no "wait for every co-assignee" check. Simpler
-    // (no cross-document consensus/race to get right) and avoids the
-    // real problem a shared task with a slow co-assignee would
-    // otherwise create: the fast finisher would see nothing next cycle.
-    // The rolled-forward task keeps the same group_id, so it still
-    // shows alongside a still-open sibling from the current occurrence.
-    let nextTask = null;
-    if (task.recurrence_rule && task.due_date) {
-      const nextDue = nextOccurrenceAfter(task.recurrence_rule, task.due_date, task.due_date);
-      if (nextDue) {
-        nextTask = await Task.create({
-          ministry_id: req.ministryId,
-          title: task.title,
-          description: task.description,
-          due_date: nextDue,
-          recurrence_rule: task.recurrence_rule,
-          assigned_to: task.assigned_to,
-          assigned_by: task.assigned_by,
-          group_id: task.group_id,
-        });
-        await notifyTaskAssigned({ ministryId: req.ministryId, task: nextTask });
+router.put(
+  "/:id/complete",
+  [body("notes").optional().trim()],
+  validate,
+  async (req, res) => {
+    try {
+      const task = await Task.findOne({ _id: req.params.id, ministry_id: req.ministryId });
+      if (!task) return res.status(404).json({ error: "Task not found" });
+      if (!canManage(req, task)) {
+        return res.status(403).json({ error: "Insufficient permissions" });
       }
-    }
+      task.status = "done";
+      task.completed_at = new Date();
+      task.completion_notes = req.body?.notes || undefined;
+      task.hold_reason = undefined;
+      await task.save();
 
-    res.json({ ...task.toObject(), next_task: nextTask });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to complete task" });
-  }
-});
+      // Each person's row rolls forward independently the moment THEY
+      // finish — there's no "wait for every co-assignee" check. Simpler
+      // (no cross-document consensus/race to get right) and avoids the
+      // real problem a shared task with a slow co-assignee would
+      // otherwise create: the fast finisher would see nothing next cycle.
+      // The rolled-forward task keeps the same group_id, so it still
+      // shows alongside a still-open sibling from the current occurrence.
+      let nextTask = null;
+      if (task.recurrence_rule && task.due_date) {
+        const nextDue = nextOccurrenceAfter(task.recurrence_rule, task.due_date, task.due_date);
+        if (nextDue) {
+          nextTask = await Task.create({
+            ministry_id: req.ministryId,
+            title: task.title,
+            description: task.description,
+            due_date: nextDue,
+            recurrence_rule: task.recurrence_rule,
+            assigned_to: task.assigned_to,
+            assigned_by: task.assigned_by,
+            group_id: task.group_id,
+          });
+          await notifyTaskAssigned({ ministryId: req.ministryId, task: nextTask });
+        }
+      }
+
+      res.json({ ...task.toObject(), next_task: nextTask });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to complete task" });
+    }
+  },
+);
 
 // PUT /api/tasks/:id/reopen — also used to come back off hold, since
 // "open" is the only non-terminal state to return to either from.
@@ -459,6 +466,7 @@ router.put("/:id/reopen", async (req, res) => {
     }
     task.status = "open";
     task.completed_at = undefined;
+    task.completion_notes = undefined;
     task.hold_reason = undefined;
     await task.save();
     res.json(task);

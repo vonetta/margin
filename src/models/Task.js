@@ -25,6 +25,7 @@ const taskSchema = new mongoose.Schema({
 
   status: { type: String, enum: ["open", "done", "on_hold"], default: "open" },
   completed_at: { type: Date },
+  completion_notes: { type: String, trim: true },
   hold_reason: { type: String, trim: true },
 
   // A "shared" task (multiple people on one thing) is modeled as several

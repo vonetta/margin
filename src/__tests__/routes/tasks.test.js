@@ -610,6 +610,84 @@ describe("PUT /api/tasks/:id/complete and /reopen", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("open");
   });
+
+  it("stores optional notes when completing a task", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Do the thing",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/complete`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`)
+      .send({ notes: "Confirmed with the venue directly, no deposit needed." });
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion_notes).toBe("Confirmed with the venue directly, no deposit needed.");
+  });
+
+  it("leaves completion_notes unset when none are given", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Do the thing",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/complete`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion_notes).toBeUndefined();
+  });
+
+  it("clears completion_notes when a completed task is reopened", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Do the thing",
+      assigned_to: teamAId,
+      assigned_by: teamAId,
+      status: "done",
+      completed_at: new Date(),
+      completion_notes: "Handled it myself",
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}/reopen`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion_notes).toBeUndefined();
+  });
+});
+
+describe("PUT /api/tasks/:id — editing completion_notes after the fact", () => {
+  it("lets the assignee update notes on an already-completed task", async () => {
+    const task = await Task.create({
+      ministry_id: "ktm-test",
+      title: "Do the thing",
+      assigned_to: teamAId,
+      assigned_by: adminId,
+      status: "done",
+      completed_at: new Date(),
+      completion_notes: "First draft of notes",
+    });
+
+    const res = await request(app)
+      .put(`/api/tasks/${task._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamAToken}`)
+      .send({ completion_notes: "Updated with more detail" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion_notes).toBe("Updated with more detail");
+  });
 });
 
 describe("PUT /api/tasks/:id/hold", () => {
