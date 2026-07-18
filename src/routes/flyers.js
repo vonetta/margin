@@ -275,6 +275,7 @@ const buildFlyerAssets = async (req) => {
       size: "social",
       typeSystem,
       resolvedTone,
+      visualProhibitions: aiProfile?.visual_prohibitions || [],
     });
 
     const socialUp = await uploadFile({

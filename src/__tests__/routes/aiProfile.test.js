@@ -366,6 +366,146 @@ describe("POST /api/profile/sops", () => {
   });
 });
 
+describe("PUT /api/profile/sops/drafts/:id/reject", () => {
+  const createDraft = async () => {
+    const res = await request(app)
+      .post("/api/profile/sops")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ title: "Sunday Setup", content: "1. Arrange chairs." });
+    return res.body._id;
+  };
+
+  it("rejects a draft with no notes, and logs nothing to the feedback log", async () => {
+    const id = await createDraft();
+
+    const res = await request(app)
+      .put(`/api/profile/sops/drafts/${id}/reject`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("rejected");
+
+    const profile = await AiProfile.findOne({ ministry_id: "ktm-test" });
+    expect((profile.sops || []).some((s) => s.tags.includes("feedback"))).toBe(false);
+  });
+
+  it("rejecting with notes logs a feedback entry, so it appears in ProfileEditor's Feedback tab as advertised", async () => {
+    const id = await createDraft();
+
+    const res = await request(app)
+      .put(`/api/profile/sops/drafts/${id}/reject`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ notes: "This described the wrong setup order for a Sunday service." });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("rejected");
+
+    const profile = await AiProfile.findOne({ ministry_id: "ktm-test" });
+    const feedbackEntry = (profile.sops || []).find((s) => s.tags.includes("feedback"));
+    expect(feedbackEntry).toBeDefined();
+    expect(feedbackEntry.title).toBe("Feedback on: Sunday Setup");
+    expect(feedbackEntry.content).toBe("This described the wrong setup order for a Sunday service.");
+  });
+
+  it("404s for a draft that doesn't exist in this ministry", async () => {
+    const res = await request(app)
+      .put("/api/profile/sops/drafts/000000000000000000000000/reject")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ notes: "Anything" });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("PUT /api/profile/platform-settings", () => {
+  it("updates platforms and platform_notes", async () => {
+    const res = await request(app)
+      .put("/api/profile/platform-settings")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        platforms: ["Instagram", "Email"],
+        platform_notes: { Instagram: "Conversational, visually driven." },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.platforms).toEqual(["Instagram", "Email"]);
+    expect(res.body.platform_notes.Instagram).toBe("Conversational, visually driven.");
+  });
+
+  it("rejects a non-array platforms value", async () => {
+    const res = await request(app)
+      .put("/api/profile/platform-settings")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ platforms: "Instagram" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("PUT /api/profile/visual-guidelines", () => {
+  it("replaces the visual_prohibitions list", async () => {
+    const res = await request(app)
+      .put("/api/profile/visual-guidelines")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ visual_prohibitions: ["Neon colors outside the palette", "Em dashes in graphics"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(["Neon colors outside the palette", "Em dashes in graphics"]);
+  });
+
+  it("rejects a non-array value", async () => {
+    const res = await request(app)
+      .put("/api/profile/visual-guidelines")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ visual_prohibitions: "not an array" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("PUT /api/profile/templates and /recurring-content", () => {
+  it("replaces templates", async () => {
+    const res = await request(app)
+      .put("/api/profile/templates")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ templates: [{ title: "Event Announcement", content: "Join us for..." }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].title).toBe("Event Announcement");
+  });
+
+  it("replaces recurring_content", async () => {
+    const res = await request(app)
+      .put("/api/profile/recurring-content")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ recurring_content: [{ title: "Weekly Verse", content: "Every Sunday we share..." }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].title).toBe("Weekly Verse");
+  });
+
+  it("rejects a template with empty content", async () => {
+    const res = await request(app)
+      .put("/api/profile/templates")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ templates: [{ title: "Empty", content: "" }] });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("Role enforcement on profile edits", () => {
   it("rejects a team-role user from editing voice profile", async () => {
     await User.deleteMany({ email: "team-test@ktm.com" });

@@ -213,6 +213,136 @@ router.put(
   },
 );
 
+// PUT /api/profile/platform-settings
+// Which platforms this ministry actually posts to, plus an optional
+// per-platform tone/style note (matched case-insensitively against the
+// `platform` generateContent/chatTurn already receive — see
+// generationService.js's buildSystemPrompt). Collected on the schema
+// from the start but never had an edit route until now.
+router.put(
+  "/platform-settings",
+  requireRole("admin", "leader"),
+  [
+    body("platforms").optional().isArray().withMessage("platforms must be an array"),
+    body("platforms.*").optional().trim().notEmpty(),
+    body("platform_notes").optional().isObject().withMessage("platform_notes must be an object"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const updates = {};
+      if (req.body.platforms !== undefined) updates.platforms = req.body.platforms;
+      if (req.body.platform_notes !== undefined) updates.platform_notes = req.body.platform_notes;
+
+      const profile = await AiProfile.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        { $set: updates },
+        { returnDocument: "after", runValidators: true },
+      );
+
+      if (!profile) {
+        return res.status(404).json({ error: "AI profile not found" });
+      }
+
+      res.json({ platforms: profile.platforms, platform_notes: profile.platform_notes });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update platform settings" });
+    }
+  },
+);
+
+// PUT /api/profile/visual-guidelines
+// Body: { visual_prohibitions: [...] } — things the AI flyer engine must
+// never depict (see aiFlyerService.js's buildFullFlyerPrompt). Replaces
+// the whole list, same convention as PUT /ctas.
+router.put(
+  "/visual-guidelines",
+  requireRole("admin", "leader"),
+  [
+    body("visual_prohibitions").isArray().withMessage("visual_prohibitions must be an array"),
+    body("visual_prohibitions.*").trim().notEmpty(),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const profile = await AiProfile.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        { $set: { visual_prohibitions: req.body.visual_prohibitions } },
+        { returnDocument: "after", runValidators: true },
+      );
+
+      if (!profile) {
+        return res.status(404).json({ error: "AI profile not found" });
+      }
+
+      res.json(profile.visual_prohibitions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update visual guidelines" });
+    }
+  },
+);
+
+// PUT /api/profile/templates
+// Body: { templates: [{ title, content, tags }, ...] } — already consumed
+// by generationService.js's buildSystemPrompt (CONTENT TEMPLATES section)
+// but had no edit route past initial onboarding seeding until now.
+router.put(
+  "/templates",
+  requireRole("admin", "leader"),
+  [
+    body("templates").isArray().withMessage("templates must be an array"),
+    body("templates.*.content").trim().notEmpty().withMessage("Template content is required"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const profile = await AiProfile.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        { $set: { templates: req.body.templates } },
+        { returnDocument: "after", runValidators: true },
+      );
+
+      if (!profile) {
+        return res.status(404).json({ error: "AI profile not found" });
+      }
+
+      res.json(profile.templates);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update templates" });
+    }
+  },
+);
+
+// PUT /api/profile/recurring-content
+// Same shape/purpose as PUT /templates, for the RECURRING CONTENT AND
+// BRANDING section of the generation prompt.
+router.put(
+  "/recurring-content",
+  requireRole("admin", "leader"),
+  [
+    body("recurring_content").isArray().withMessage("recurring_content must be an array"),
+    body("recurring_content.*.content").trim().notEmpty().withMessage("Content is required"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const profile = await AiProfile.findOneAndUpdate(
+        { ministry_id: req.ministryId },
+        { $set: { recurring_content: req.body.recurring_content } },
+        { returnDocument: "after", runValidators: true },
+      );
+
+      if (!profile) {
+        return res.status(404).json({ error: "AI profile not found" });
+      }
+
+      res.json(profile.recurring_content);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update recurring content" });
+    }
+  },
+);
+
 // POST /api/profile/phrases
 // Add a sample phrase
 router.post(
@@ -265,6 +395,29 @@ router.delete(
   },
 );
 
+// Shared by POST /feedback and PUT /sops/drafts/:id/reject (with notes) —
+// both are "a human is correcting how the AI should write" moments, so
+// both land in the same feedback log ProfileEditor.js's Feedback tab
+// reads (profile.sops entries tagged "feedback").
+const pushFeedbackEntry = async (ministryId, { feedback, draftTitle }) => {
+  const feedbackEntry = {
+    title: draftTitle ? `Feedback on: ${draftTitle}` : "Feedback note",
+    content: feedback,
+    tags: ["feedback", "voice-correction"],
+    updated_at: new Date(),
+  };
+  if (draftTitle) {
+    feedbackEntry.tags.push(draftTitle.toLowerCase().replace(/\s+/g, "-"));
+  }
+
+  const profile = await AiProfile.findOneAndUpdate(
+    { ministry_id: ministryId },
+    { $push: { sops: feedbackEntry } },
+    { returnDocument: "after" },
+  );
+  return { profile, feedbackEntry };
+};
+
 // POST /api/profile/feedback
 // Log feedback from Ap Khy's review — this is the profile tweak loop
 router.post(
@@ -277,25 +430,10 @@ router.post(
   validate,
   async (req, res) => {
     try {
-      const feedbackEntry = {
-        title: `Feedback note`,
-        content: req.body.feedback,
-        tags: ["feedback", "voice-correction"],
-        updated_at: new Date(),
-      };
-
-      if (req.body.draft_title) {
-        feedbackEntry.title = `Feedback on: ${req.body.draft_title}`;
-        feedbackEntry.tags.push(
-          req.body.draft_title.toLowerCase().replace(/\s+/g, "-"),
-        );
-      }
-
-      const profile = await AiProfile.findOneAndUpdate(
-        { ministry_id: req.ministryId },
-        { $push: { sops: feedbackEntry } },
-        { returnDocument: "after" },
-      );
+      const { profile, feedbackEntry } = await pushFeedbackEntry(req.ministryId, {
+        feedback: req.body.feedback,
+        draftTitle: req.body.draft_title,
+      });
 
       if (!profile) {
         return res.status(404).json({ error: "AI profile not found" });
@@ -461,9 +599,16 @@ router.put(
 );
 
 // PUT /api/profile/sops/drafts/:id/reject
+// An optional `notes` explaining WHY it was rejected doubles as feedback
+// for the AI's future writing — logged the same way POST /feedback does,
+// so it actually appears in ProfileEditor.js's Feedback tab like its own
+// copy has always promised, rather than the note just vanishing with the
+// rejected draft.
 router.put(
   "/sops/drafts/:id/reject",
   requireRole("admin", "leader"),
+  [body("notes").optional().trim()],
+  validate,
   async (req, res) => {
     try {
       const draft = await SopDraft.findOneAndUpdate(
@@ -473,6 +618,11 @@ router.put(
       );
 
       if (!draft) return res.status(404).json({ error: "SOP draft not found" });
+
+      if (req.body.notes) {
+        await pushFeedbackEntry(req.ministryId, { feedback: req.body.notes, draftTitle: draft.title });
+      }
+
       res.json(draft);
     } catch (error) {
       res.status(500).json({ error: "Failed to reject SOP draft" });

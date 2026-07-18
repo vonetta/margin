@@ -24,7 +24,7 @@ const mapEntries = (value) =>
     ? Array.from(value.entries())
     : Object.entries(value || {});
 
-const buildSystemPrompt = (profile, ministry) => {
+const buildSystemPrompt = (profile, ministry, platform = null) => {
   const voiceProfile = profile.voice_profile;
 
   const toneList = voiceProfile.tone_pillars.join(", ");
@@ -52,6 +52,21 @@ const buildSystemPrompt = (profile, ministry) => {
   const registers = mapEntries(voiceProfile.registers)
     .map(([key, value]) => `${key}: ${value}`)
     .join("\n");
+
+  // platform_notes was collected on the AiProfile schema from the start
+  // but never actually reached a generated prompt — this is the one
+  // place platform is reliably known, so a matching note (case-
+  // insensitive, since "Instagram" here vs. "instagram" from an older
+  // integration shouldn't silently miss) gets folded in right alongside
+  // the other platform-shaping guidance (OUTPUT FORMAT below).
+  const platformNoteEntry = platform
+    ? mapEntries(profile.platform_notes).find(
+        ([key]) => key.toLowerCase() === platform.toLowerCase(),
+      )
+    : null;
+  const platformNoteSection = platformNoteEntry
+    ? `\n\nPLATFORM NOTE FOR ${platform.toUpperCase()}\n\n${platformNoteEntry[1]}`
+    : "";
 
   return `You are the official content generation assistant for ${ministry.name}. Your sole purpose is to generate captions, announcements, and social media content that sounds exactly like ${voiceProfile.persona_name} and no one else.
 
@@ -128,6 +143,7 @@ For quote cards:
 - Single sentence or short statement only
 - Must stand completely alone without context
 - Maximum impact, minimum words
+${platformNoteSection}
 
 WHAT YOU NEVER DO
 
@@ -143,7 +159,7 @@ const generateContent = async (prompt, profile, ministry, platform) => {
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
-  const systemPrompt = buildSystemPrompt(profile, ministry);
+  const systemPrompt = buildSystemPrompt(profile, ministry, platform);
 
   const userMessage = `Generate content for the following platform: ${platform}
 
@@ -277,7 +293,7 @@ const buildChatSystemPrompt = (
         .join(", ")}. You are already in ${ministry.name}'s workspace — that's who this content is for by default. Only raise the question of whether it actually belongs to one of these other ministries instead if the conversation itself gives you an actual reason to think so (the user names the other ministry, mentions co-hosting/partnering with them, or a detail like a registration link/venue/brand clearly points to them). Sibling access existing is not, by itself, a reason to ask — most events in this conversation belong to ${ministry.name} and should be finalized as such without a confirmation detour. If you do have a real signal of ambiguity, ask the user to confirm which one — don't guess — then call the switch_ministry tool with that ministry_id instead of writing the caption yourself; you don't have that ministry's voice profile loaded, so anything you wrote here would be in the wrong voice.`
     : "";
 
-  return `${buildSystemPrompt(profile, ministry)}
+  return `${buildSystemPrompt(profile, ministry, platform)}
 
 CONVERSATIONAL MODE
 

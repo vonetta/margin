@@ -126,6 +126,23 @@ describe("buildFullFlyerPrompt", () => {
     expect(prompt).toContain("a QR code will be composited there afterward");
   });
 
+  it("includes the ministry's visual prohibitions when given, and omits the section entirely when there are none", () => {
+    const withProhibitions = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Worship Intensive" },
+      visualProhibitions: ["Neon or hyper-saturated colors outside the official palette", "Em dashes in copy or graphics"],
+    });
+    expect(withProhibitions).toContain("NEVER include any of the following");
+    expect(withProhibitions).toContain("Neon or hyper-saturated colors outside the official palette");
+    expect(withProhibitions).toContain("Em dashes in copy or graphics");
+
+    const withoutProhibitions = buildFullFlyerPrompt({
+      branding: { name: "KTM", colors: { primary: "#03293F" } },
+      content: { title: "Worship Intensive" },
+    });
+    expect(withoutProhibitions).not.toContain("NEVER include any of the following");
+  });
+
   it("tells the model not to reserve or draw any QR-shaped space when there is no QR code", () => {
     const prompt = buildFullFlyerPrompt({
       branding: { name: "KTM", colors: { primary: "#03293F" } },

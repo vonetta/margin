@@ -191,7 +191,7 @@ const LOGO_AREA = {
   margin: 0.05, // distance from the canvas edge, as a fraction of width
 };
 
-const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null, qrUrl = null, colorVariant = null }) => {
+const buildFullFlyerPrompt = ({ branding = {}, content = {}, referenceImages = [], typeSystem = null, tone = null, qrUrl = null, colorVariant = null, visualProhibitions = [] }) => {
   // colorVariant is chosen once by generateAiFlyer (see COLOR_VARIANT_KEYS
   // above) and passed in here rather than randomized inline, so this
   // function stays a pure, deterministic prompt builder — easy to test,
@@ -272,7 +272,7 @@ Legibility is a hard requirement, not a style choice: every single text element 
 
 ${qrUrl ? "Never draw anything that resembles a QR code, barcode, or scannable-looking grid/dot pattern anywhere in the design, including inside decorative elements — a real QR code is composited into the reserved bottom-right corner afterward, and the model attempting to draw its own (even as a texture or pattern) reads as a broken second code once the real one is placed on top." : "This flyer has no QR code — never draw one, and never leave a blank reserved square/box anywhere in the design (e.g. in a corner) as if space were being held for one. Fill the entire canvas with real design content; an empty box reads as a mistake, not a design choice."}
 
-Design direction: ${toneDesign?.direction || DEFAULT_DESIGN_DIRECTION} Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements across the entire composition, in keeping with the direction above. No stock-photo clutter, no placeholder people beyond the reference photos provided.${qrUrl ? " Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward." : ""} This should look like it was made by a professional graphic designer for a real organization, not generic AI art.`;
+Design direction: ${toneDesign?.direction || DEFAULT_DESIGN_DIRECTION} Fill the FULL canvas with intentional design from top to bottom — no large empty single-color areas or dead space; balance content, texture, or decorative elements across the entire composition, in keeping with the direction above. No stock-photo clutter, no placeholder people beyond the reference photos provided.${qrUrl ? " Leave one small, clearly-bounded uncluttered area (roughly bottom-right, about 15% of the image width) completely free of text or design elements — a QR code will be composited there afterward." : ""} This should look like it was made by a professional graphic designer for a real organization, not generic AI art.${visualProhibitions.length ? `\n\nThis ministry has specifically asked that the design NEVER include any of the following, under any circumstances:\n${visualProhibitions.map((p) => `- ${p}`).join("\n")}` : ""}`;
 };
 
 // Composites a real, guaranteed-scannable QR code onto the generated image
@@ -386,13 +386,23 @@ const generateAiFlyer = async ({
   // against the event text (manual-entry path), or explicitly null for
   // "no tone preference."
   resolvedTone,
+  visualProhibitions = [],
 }) => {
   const referenceImages = await gatherReferenceImages({ host, speakers });
   const toneSource = [content.title, content.subtitle, content.description].filter(Boolean).join(" ");
   const tone =
     resolvedTone !== undefined ? resolvedTone : inferTone(toneSource, typeSystem?.tone_keywords);
   const colorVariant = pickColorVariant();
-  const prompt = buildFullFlyerPrompt({ branding, content, referenceImages, typeSystem, tone, qrUrl, colorVariant });
+  const prompt = buildFullFlyerPrompt({
+    branding,
+    content,
+    referenceImages,
+    typeSystem,
+    tone,
+    qrUrl,
+    colorVariant,
+    visualProhibitions,
+  });
   const aspectRatio = ASPECT_RATIO_BY_SIZE[size] || ASPECT_RATIO_BY_SIZE.social;
 
   let png = await generateFullFlyer(prompt, referenceImages, { aspectRatio });

@@ -8,7 +8,7 @@ jest.mock("@anthropic-ai/sdk", () => {
 
 process.env.ANTHROPIC_API_KEY = "test-key";
 
-const { chatTurn } = require("../../services/generationService");
+const { chatTurn, buildSystemPrompt } = require("../../services/generationService");
 const { defaultStyle } = require("../../services/layouts/styleSchema");
 
 const profile = {
@@ -32,6 +32,29 @@ const ministry = {
   name: "Khy Traylor Global Ministries",
   entity_boundary: "Never mix KTM and Salt & Light content.",
 };
+
+describe("buildSystemPrompt platform_notes", () => {
+  it("includes the matching platform note (case-insensitively) when one exists", () => {
+    const profileWithNotes = {
+      ...profile,
+      platform_notes: { Instagram: "Conversational, immediate, visually driven." },
+    };
+    const prompt = buildSystemPrompt(profileWithNotes, ministry, "instagram");
+    expect(prompt).toContain("PLATFORM NOTE FOR INSTAGRAM");
+    expect(prompt).toContain("Conversational, immediate, visually driven.");
+  });
+
+  it("omits the platform-note section entirely when no note matches", () => {
+    const prompt = buildSystemPrompt(profile, ministry, "Instagram");
+    expect(prompt).not.toContain("PLATFORM NOTE FOR");
+  });
+
+  it("omits the platform-note section when no platform is given at all", () => {
+    const profileWithNotes = { ...profile, platform_notes: { Instagram: "Some note" } };
+    const prompt = buildSystemPrompt(profileWithNotes, ministry);
+    expect(prompt).not.toContain("PLATFORM NOTE FOR");
+  });
+});
 
 describe("chatTurn", () => {
   beforeEach(() => mockCreate.mockReset());
