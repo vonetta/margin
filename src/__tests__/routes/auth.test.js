@@ -314,6 +314,65 @@ describe("Protected routes require auth", () => {
   });
 });
 
+describe("PUT /api/auth/change-password", () => {
+  const changePassword = (token, body) =>
+    request(app)
+      .put("/api/auth/change-password")
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+  it("changes the password and lets the user log in with the new one", async () => {
+    const registerRes = await request(app).post("/api/auth/register").send(testUser);
+
+    const res = await changePassword(registerRes.body.token, {
+      current_password: testUser.password,
+      new_password: "NewPassword456",
+    });
+    expect(res.status).toBe(200);
+
+    const loginRes = await request(app)
+      .post("/api/auth/login")
+      .send({ email: testUser.email, password: "NewPassword456" });
+    expect(loginRes.status).toBe(200);
+
+    const oldLoginRes = await request(app)
+      .post("/api/auth/login")
+      .send({ email: testUser.email, password: testUser.password });
+    expect(oldLoginRes.status).toBe(401);
+  });
+
+  it("rejects the wrong current password", async () => {
+    const registerRes = await request(app).post("/api/auth/register").send(testUser);
+
+    const res = await changePassword(registerRes.body.token, {
+      current_password: "wrongpassword",
+      new_password: "NewPassword456",
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Current password is incorrect");
+  });
+
+  it("rejects a new password shorter than 8 characters", async () => {
+    const registerRes = await request(app).post("/api/auth/register").send(testUser);
+
+    const res = await changePassword(registerRes.body.token, {
+      current_password: testUser.password,
+      new_password: "short",
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 401 with no token", async () => {
+    const res = await request(app)
+      .put("/api/auth/change-password")
+      .send({ current_password: testUser.password, new_password: "NewPassword456" });
+
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("GET /api/auth/me", () => {
   it("enriches each membership with the ministry's name", async () => {
     const registerRes = await request(app)

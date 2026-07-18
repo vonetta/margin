@@ -327,4 +327,51 @@ router.get("/me", async (req, res) => {
   }
 });
 
+// PUT /api/auth/change-password
+// Not ministry-scoped (a password belongs to the user, not a tenant), so
+// this verifies the token itself rather than going through authMiddleware
+// — same manual pattern as GET /me above, since this router is mounted
+// ahead of the app-wide authMiddleware in app.js.
+router.put(
+  "/change-password",
+  [
+    body("current_password").notEmpty().withMessage("Current password is required"),
+    body("new_password")
+      .isLength({ min: 8 })
+      .withMessage("New password must be at least 8 characters"),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No token provided" });
+      }
+
+      const token = authHeader.split(" ")[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id).select("+password");
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const matches = await user.comparePassword(req.body.current_password);
+      if (!matches) {
+        return res.status(401).json({ error: "Current password is incorrect" });
+      }
+
+      user.password = await bcrypt.hash(req.body.new_password, 12);
+      await user.save();
+
+      res.json({ success: true });
+    } catch (error) {
+      if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+        return res.status(401).json({ error: "Invalid or expired session" });
+      }
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  },
+);
+
 module.exports = router;
