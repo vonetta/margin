@@ -252,9 +252,9 @@ const buildNewsletterHtml = async (issue, ministry) => {
 
     .toc { background: ${colors.gold}; color: #1c1c1c; font-size: 8pt; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 24px; }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; padding: 22px 24px; }
+    .grid { column-count: 2; column-gap: 18px; padding: 22px 24px; }
 
-    .card { break-inside: avoid; background: #fff; border: 0.5px solid #e5e2da; border-radius: 8px; padding: 16px; border-top: 3px solid ${colors.primary}; }
+    .card { break-inside: avoid; display: inline-block; width: 100%; background: #fff; border: 0.5px solid #e5e2da; border-radius: 8px; padding: 16px; border-top: 3px solid ${colors.primary}; margin-bottom: 18px; }
     .card-title { font-family: "Cinzel", Georgia, serif; font-size: 9.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 10px; }
     .card-body { white-space: pre-wrap; word-wrap: break-word; }
 
