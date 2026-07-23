@@ -7,6 +7,7 @@ const connectDB = require("./config/db");
 const tenantMiddleware = require("./middleware/tenant");
 const { authMiddleware, requireOnboarding } = require("./middleware/auth");
 const authRoutes = require("./routes/auth");
+const platformAdminRoutes = require("./routes/platformAdmin");
 const ministryRoutes = require("./routes/ministry");
 const aiProfileRoutes = require("./routes/aiProfile");
 const contentRoutes = require("./routes/content");
@@ -125,6 +126,12 @@ app.use("/api/public/invites", publicInviteRoutes);
 // before the tenant-guarded /api/social/* routes below, so it's matched
 // first and never hits the auth middleware.
 app.use("/api/social/callback", publicSocialCallbackRoutes);
+
+// Platform-operator routes — cross-tenant by design, so these have to
+// bypass tenantMiddleware/authMiddleware entirely (their own
+// requirePlatformAdmin does the auth check) rather than being scoped to
+// whatever ministry an x-ministry-id header happens to name.
+app.use("/api/platform-admin", platformAdminRoutes);
 
 // All routes below require tenant and auth middleware
 app.use("/api", tenantMiddleware);

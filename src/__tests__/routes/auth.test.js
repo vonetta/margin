@@ -413,4 +413,29 @@ describe("GET /api/auth/me", () => {
     const res = await request(app).get("/api/auth/me");
     expect(res.status).toBe(401);
   });
+
+  it("defaults is_platform_admin to false for an ordinary user", async () => {
+    const registerRes = await request(app)
+      .post("/api/auth/register")
+      .send(testUser);
+
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${registerRes.body.token}`);
+
+    expect(res.body.is_platform_admin).toBe(false);
+  });
+
+  it("surfaces is_platform_admin: true once set on the user", async () => {
+    const registerRes = await request(app)
+      .post("/api/auth/register")
+      .send(testUser);
+    await User.findOneAndUpdate({ email: testUser.email }, { is_platform_admin: true });
+
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${registerRes.body.token}`);
+
+    expect(res.body.is_platform_admin).toBe(true);
+  });
 });

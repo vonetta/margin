@@ -25,6 +25,12 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   ministries: [ministryMembershipSchema],
   is_active: { type: Boolean, default: true },
+  // Platform-operator visibility across every ministry, not scoped to any
+  // one tenant — deliberately separate from ministries[].role (a
+  // ministry's own admin still can't see other ministries). No route
+  // exists to set this on another account; it's a manual DB flip, so
+  // there's never an accidental second superadmin.
+  is_platform_admin: { type: Boolean, default: false },
   last_login: { type: Date },
   created_at: { type: Date, default: Date.now },
 });
