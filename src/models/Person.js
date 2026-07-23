@@ -15,6 +15,12 @@ const personSchema = new mongoose.Schema({
   cutout_key: { type: String },
   bio: { type: String, trim: true },
   email: { type: String, trim: true, lowercase: true },
+  birthdate: { type: Date },
+  // Distinct from `active` — a person can be on the roster without ever
+  // having agreed to have their birthday broadcast in a public-facing
+  // newsletter. Defaults false: adding a birthdate does nothing on its
+  // own, this must be explicitly turned on per person.
+  newsletter_birthday_consent: { type: Boolean, default: false },
   active: { type: Boolean, default: true },
   created_at: { type: Date, default: Date.now },
 });

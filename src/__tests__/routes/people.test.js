@@ -106,6 +106,85 @@ describe("POST /api/people", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("creates a person with a birthdate, defaulting newsletter consent to false", async () => {
+    const res = await request(app)
+      .post("/api/people")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Has Birthday", birthdate: "1990-05-14" });
+
+    expect(res.status).toBe(201);
+    expect(new Date(res.body.birthdate).toISOString().slice(0, 10)).toBe("1990-05-14");
+    expect(res.body.newsletter_birthday_consent).toBe(false);
+  });
+
+  it("rejects an invalid birthdate", async () => {
+    const res = await request(app)
+      .post("/api/people")
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Bad Date", birthdate: "not-a-date" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("PUT /api/people/:id", () => {
+  it("sets a birthdate and newsletter_birthday_consent", async () => {
+    const person = await Person.create({ ministry_id: "ktm-test", name: "Someone" });
+
+    const res = await request(app)
+      .put(`/api/people/${person._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ birthdate: "1985-11-02", newsletter_birthday_consent: true });
+
+    expect(res.status).toBe(200);
+    expect(new Date(res.body.birthdate).toISOString().slice(0, 10)).toBe("1985-11-02");
+    expect(res.body.newsletter_birthday_consent).toBe(true);
+  });
+
+  it("can revoke newsletter_birthday_consent after granting it", async () => {
+    const person = await Person.create({
+      ministry_id: "ktm-test",
+      name: "Someone",
+      newsletter_birthday_consent: true,
+    });
+
+    const res = await request(app)
+      .put(`/api/people/${person._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ newsletter_birthday_consent: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.newsletter_birthday_consent).toBe(false);
+  });
+
+  it("rejects an invalid birthdate", async () => {
+    const person = await Person.create({ ministry_id: "ktm-test", name: "Someone" });
+
+    const res = await request(app)
+      .put(`/api/people/${person._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ birthdate: "not-a-date" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects updates by a team member", async () => {
+    const person = await Person.create({ ministry_id: "ktm-test", name: "Someone" });
+
+    const res = await request(app)
+      .put(`/api/people/${person._id}`)
+      .set("x-ministry-id", "ktm-test")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({ name: "Changed" });
+
+    expect(res.status).toBe(403);
+  });
 });
 
 describe("GET /api/people", () => {

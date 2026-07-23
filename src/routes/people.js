@@ -72,6 +72,8 @@ router.post(
       .withMessage("Invalid role"),
     body("email").optional().trim().isEmail().withMessage("Invalid email"),
     body("bio").optional().trim(),
+    body("birthdate").optional({ nullable: true }).isISO8601().withMessage("Invalid birthdate"),
+    body("newsletter_birthday_consent").optional().isBoolean(),
   ],
   validate,
   async (req, res) => {
@@ -83,6 +85,8 @@ router.post(
         role: req.body.role || "member",
         email: req.body.email,
         bio: req.body.bio,
+        birthdate: req.body.birthdate || undefined,
+        newsletter_birthday_consent: req.body.newsletter_birthday_consent || false,
       });
       res.status(201).json(person);
     } catch (error) {
@@ -106,11 +110,22 @@ router.put(
       .isIn(["host", "speaker", "leader", "member", "staff"])
       .withMessage("Invalid role"),
     body("email").optional().trim().isEmail().withMessage("Invalid email"),
+    body("birthdate").optional({ nullable: true }).isISO8601().withMessage("Invalid birthdate"),
+    body("newsletter_birthday_consent").optional().isBoolean(),
   ],
   validate,
   async (req, res) => {
     try {
-      const allowed = ["name", "title", "role", "email", "bio", "active"];
+      const allowed = [
+        "name",
+        "title",
+        "role",
+        "email",
+        "bio",
+        "active",
+        "birthdate",
+        "newsletter_birthday_consent",
+      ];
       const updates = Object.keys(req.body)
         .filter((key) => allowed.includes(key))
         .reduce((obj, key) => {
