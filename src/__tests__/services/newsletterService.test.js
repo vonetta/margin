@@ -37,6 +37,23 @@ describe("getMonthCalendarEntries", () => {
     const entries = await getMonthCalendarEntries("nl-svc-test", 7, 2026);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ title: "Sunday Service", recurring_note: null });
+    expect(entries[0].start_date).toBeTruthy();
+    expect(entries[0].end_date).toBeNull();
+  });
+
+  it("carries an event's end date through for a multi-day event", async () => {
+    await Event.create({
+      ministry_id: "nl-svc-test",
+      title: "Prophetic Intensive",
+      start: new Date("2026-07-07T13:00:00Z"),
+      end: new Date("2026-07-09T20:00:00Z"),
+      visibility: "public",
+      status: "approved",
+    });
+
+    const entries = await getMonthCalendarEntries("nl-svc-test", 7, 2026);
+    expect(entries).toHaveLength(1);
+    expect(new Date(entries[0].end_date).toISOString()).toBe("2026-07-09T20:00:00.000Z");
   });
 
   it("excludes a one-off event outside the target month", async () => {
@@ -90,7 +107,12 @@ describe("getMonthCalendarEntries", () => {
 
     const entries = await getMonthCalendarEntries("nl-svc-test", 7, 2026);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ title: "Weekly Bible Study", date: null, recurring_note: "Weekly" });
+    expect(entries[0]).toMatchObject({
+      title: "Weekly Bible Study",
+      start_date: null,
+      end_date: null,
+      recurring_note: "Weekly",
+    });
   });
 });
 

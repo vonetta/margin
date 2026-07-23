@@ -23,13 +23,60 @@ const formatShortDate = (iso) => {
   return `${MONTH_NAMES[d.getUTCMonth()].slice(0, 3)} ${d.getUTCDate()}`;
 };
 
+// Same-day events (the common case) just show one date; a real
+// multi-day range (a retreat, a conference) collapses to "Aug 7-9" when
+// both ends fall in the same month, or "Jul 30 - Aug 2" when they don't.
+const formatDateRange = (startIso, endIso) => {
+  if (!startIso) return "";
+  const start = new Date(startIso);
+  const startLabel = formatShortDate(startIso);
+  if (!endIso) return startLabel;
+
+  const end = new Date(endIso);
+  if (
+    start.getUTCFullYear() === end.getUTCFullYear() &&
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCDate() === end.getUTCDate()
+  ) {
+    return startLabel;
+  }
+  if (start.getUTCMonth() === end.getUTCMonth()) {
+    return `${MONTH_NAMES[start.getUTCMonth()].slice(0, 3)} ${start.getUTCDate()}-${end.getUTCDate()}`;
+  }
+  return `${startLabel} - ${formatShortDate(endIso)}`;
+};
+
+// Leader Message and The Scholar's Desk both reuse text_block with these
+// same optional fields rather than becoming two more bespoke section
+// types — a byline/title/subtitle/key-takeaways/pull-quote/signature
+// structure is generic enough to serve both (and any future text_block
+// section that wants some of it), all fields optional and blank by
+// default so plainer text_block sections (e.g. Scripture Meditation)
+// are unaffected if left unset.
 const renderTextBlock = (section) => {
-  const { body, photo_url } = section.content || {};
+  const { byline, title, subtitle, body, key_takeaways, quote, saying, signature, blog_note, photo_url } =
+    section.content || {};
+  const takeaways = key_takeaways || [];
   return `
     <div class="section">
       <div class="section-title">${escapeHtml(section.title)}</div>
+      ${byline ? `<div class="byline">${escapeHtml(byline)}</div>` : ""}
       ${photo_url ? `<img class="section-photo" src="${photo_url}" alt="" />` : ""}
+      ${title ? `<div class="block-title">${escapeHtml(title)}</div>` : ""}
+      ${subtitle ? `<div class="block-subtitle">${escapeHtml(subtitle)}</div>` : ""}
       <div class="section-body">${escapeHtml(body || "")}</div>
+      ${
+        takeaways.length > 0
+          ? `<div class="takeaways">
+               <div class="takeaways-title">Key Takeaways</div>
+               <ul>${takeaways.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
+             </div>`
+          : ""
+      }
+      ${saying ? `<div class="saying">${escapeHtml(saying)}</div>` : ""}
+      ${signature ? `<div class="signature">${escapeHtml(signature)}</div>` : ""}
+      ${quote ? `<div class="pull-quote">${escapeHtml(quote)}</div>` : ""}
+      ${blog_note ? `<div class="blog-note">${escapeHtml(blog_note)}</div>` : ""}
     </div>`;
 };
 
@@ -75,7 +122,7 @@ const renderCalendar = (section) => {
       <ul class="section-list">
         ${entries
           .map((e) => {
-            const when = e.recurring_note || formatShortDate(e.date);
+            const when = e.recurring_note || formatDateRange(e.start_date, e.end_date);
             return `<li><strong>${escapeHtml(e.title)}</strong> — ${escapeHtml(when)}${
               e.location ? ` · ${escapeHtml(e.location)}` : ""
             }</li>`;
@@ -172,6 +219,17 @@ const buildNewsletterHtml = async (issue, ministry) => {
     .section-photo-circle { width: 100px; height: 100px; object-fit: cover; border-radius: 50%; margin-bottom: 10px; }
     .spotlight-name { font-size: 13pt; font-weight: bold; color: ${colors.primary}; margin-bottom: 6px; }
     .qa-item { margin-top: 8px; }
+    .byline { font-size: 9pt; font-style: italic; color: #666; margin-bottom: 8px; }
+    .block-title { font-size: 15pt; font-weight: bold; color: ${colors.primary}; margin-bottom: 4px; }
+    .block-subtitle { font-size: 10pt; font-weight: bold; color: #555; margin-bottom: 10px; }
+    .takeaways { background: #f8f7f5; border-radius: 6px; padding: 12px 16px; margin: 12px 0; }
+    .takeaways-title { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 6px; }
+    .takeaways ul { padding-left: 18px; }
+    .takeaways li { margin-bottom: 4px; }
+    .saying { font-style: italic; margin-top: 10px; color: ${colors.primary}; }
+    .signature { font-style: italic; font-weight: bold; font-size: 13pt; margin-top: 4px; color: ${colors.primary}; }
+    .pull-quote { background: ${colors.primary}; color: #fff; font-weight: bold; text-align: center; padding: 16px; border-radius: 6px; margin-top: 14px; font-size: 11pt; }
+    .blog-note { background: #f0ede8; border-radius: 6px; padding: 10px 14px; margin-top: 12px; font-size: 9.5pt; }
     .section-list { list-style: none; }
     .section-list li { padding: 4px 0; border-bottom: 1px dotted #ddd; }
     .give-section { text-align: center; }

@@ -69,14 +69,16 @@ const getMonthCalendarEntries = async (ministryId, month, year) => {
     if (e.recurrence_rule) {
       entries.push({
         title: e.title,
-        date: null,
+        start_date: null,
+        end_date: null,
         recurring_note: describeRecurrence(e.recurrence_rule),
         location: e.location || "",
       });
     } else if (e.start >= from && e.start <= to) {
       entries.push({
         title: e.title,
-        date: e.start.toISOString(),
+        start_date: e.start.toISOString(),
+        end_date: e.end ? e.end.toISOString() : null,
         recurring_note: null,
         location: e.location || "",
       });

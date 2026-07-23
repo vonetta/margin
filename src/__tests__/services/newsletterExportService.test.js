@@ -54,6 +54,109 @@ describe("buildNewsletterHtml", () => {
     expect(html).toContain("Trust the process.");
   });
 
+  it("renders a text_block's byline, title, and subtitle when set (The Scholar's Desk)", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "guest_column",
+          type: "text_block",
+          title: "The Scholar's Desk",
+          enabled: true,
+          order: 0,
+          content: {
+            byline: "with Vonetta Stevenson",
+            title: "Cracking the Code",
+            subtitle: "The Mechanics of Under-Pressure Faith",
+            body: "One of the biggest misconceptions...",
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("with Vonetta Stevenson");
+    expect(html).toContain("Cracking the Code");
+    expect(html).toContain("The Mechanics of Under-Pressure Faith");
+  });
+
+  it("renders a text_block's key takeaways as a bulleted list", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "guest_column",
+          type: "text_block",
+          title: "The Scholar's Desk",
+          enabled: true,
+          order: 0,
+          content: {
+            body: "",
+            key_takeaways: [
+              "Comfort has both an emotional and legal dimension in Scripture.",
+              "God is our Advocate.",
+              "Understanding the mechanics of comfort changes how we navigate affliction.",
+            ],
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("Key Takeaways");
+    expect(html).toContain("God is our Advocate.");
+  });
+
+  it("omits the key-takeaways box entirely when there are none", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        { key: "guest_column", type: "text_block", title: "The Scholar's Desk", enabled: true, order: 0, content: { body: "" } },
+      ]),
+      ministry,
+    );
+    expect(html).not.toContain("Key Takeaways");
+  });
+
+  it("renders a text_block's saying, signature, and pull-quote (From the Leader)", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "leader_message",
+          type: "text_block",
+          title: "From the Leader",
+          enabled: true,
+          order: 0,
+          content: {
+            body: "In a world that moves fast...",
+            saying: "Keep trusting. Keep building. Keep believing.",
+            signature: "Apostle Khy",
+            quote: "The pressure that feels like it will break you is preparing you to carry what will change many.",
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("Keep trusting. Keep building. Keep believing.");
+    expect(html).toContain("Apostle Khy");
+    expect(html).toContain("preparing you to carry what will change many.");
+  });
+
+  it("renders a text_block's blog_note (the 'want to go deeper' callout)", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "guest_column",
+          type: "text_block",
+          title: "The Scholar's Desk",
+          enabled: true,
+          order: 0,
+          content: {
+            body: "",
+            blog_note: "Want to go deeper? Read more from Vonetta Stevenson on her blog: irepresentchrist.com",
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("irepresentchrist.com");
+  });
+
   it("omits a disabled section entirely", async () => {
     const html = await buildNewsletterHtml(
       baseIssue([
@@ -126,13 +229,96 @@ describe("buildNewsletterHtml", () => {
           title: "Kingdom Calendar",
           enabled: true,
           order: 0,
-          content: { entries: [{ title: "Weekly Bible Study", date: null, recurring_note: "Weekly", location: "" }] },
+          content: {
+            entries: [{ title: "Weekly Bible Study", start_date: null, end_date: null, recurring_note: "Weekly", location: "" }],
+          },
         },
       ]),
       ministry,
     );
     expect(html).toContain("Weekly Bible Study");
     expect(html).toContain("Weekly");
+  });
+
+  it("renders a same-day calendar entry as a single date", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "calendar",
+          type: "calendar",
+          title: "Kingdom Calendar",
+          enabled: true,
+          order: 0,
+          content: {
+            entries: [
+              {
+                title: "Sunday Service",
+                start_date: "2026-07-12T18:00:00Z",
+                end_date: null,
+                recurring_note: null,
+                location: "",
+              },
+            ],
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("Jul 12");
+  });
+
+  it("renders a multi-day calendar entry as a date range within the same month", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "calendar",
+          type: "calendar",
+          title: "Kingdom Calendar",
+          enabled: true,
+          order: 0,
+          content: {
+            entries: [
+              {
+                title: "Prophetic Intensive",
+                start_date: "2026-08-07T13:00:00Z",
+                end_date: "2026-08-09T20:00:00Z",
+                recurring_note: null,
+                location: "Atlanta, GA",
+              },
+            ],
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("Aug 7-9");
+  });
+
+  it("renders a multi-day calendar entry spanning two different months", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "calendar",
+          type: "calendar",
+          title: "Kingdom Calendar",
+          enabled: true,
+          order: 0,
+          content: {
+            entries: [
+              {
+                title: "Cross-Month Retreat",
+                start_date: "2026-07-30T13:00:00Z",
+                end_date: "2026-08-02T20:00:00Z",
+                recurring_note: null,
+                location: "",
+              },
+            ],
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("Jul 30 - Aug 2");
   });
 
   it("escapes HTML in freeform content to prevent injection", async () => {
