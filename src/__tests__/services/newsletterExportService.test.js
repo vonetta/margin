@@ -36,6 +36,70 @@ describe("buildNewsletterHtml", () => {
     expect(html).toContain("Kingdom Strength");
   });
 
+  it("includes a table-of-contents bar listing the enabled sections' titles", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        { key: "leader_message", type: "text_block", title: "From the Leader", enabled: true, order: 0, content: { body: "" } },
+        { key: "milestones", type: "list_block", title: "Ministry Milestones", enabled: true, order: 1, content: { items: [] } },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("Inside this issue");
+    expect(html).toContain("From the Leader");
+    expect(html).toContain("Ministry Milestones");
+  });
+
+  it("omits a disabled section from the table of contents", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        { key: "leader_message", type: "text_block", title: "From the Leader", enabled: false, order: 0, content: { body: "" } },
+      ]),
+      ministry,
+    );
+    expect(html.split("Inside this issue")[1] || "").not.toContain("From the Leader");
+  });
+
+  it("renders a date badge for a same-day calendar entry", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "calendar",
+          type: "calendar",
+          title: "Kingdom Calendar",
+          enabled: true,
+          order: 0,
+          content: {
+            entries: [
+              { title: "Sunday Service", start_date: "2026-07-12T18:00:00Z", end_date: null, recurring_note: null, location: "" },
+            ],
+          },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("date-badge");
+    expect(html).toContain("JUL");
+    expect(html).toContain("12");
+  });
+
+  it("gives the give_cta section a filled ministry-color background", async () => {
+    const html = await buildNewsletterHtml(
+      baseIssue([
+        {
+          key: "give",
+          type: "give_cta",
+          title: "Partner With Us",
+          enabled: true,
+          order: 0,
+          content: { body: "Give today" },
+        },
+      ]),
+      ministry,
+    );
+    expect(html).toContain("give-card");
+    expect(html).toContain('style="background:#1a1a2e"');
+  });
+
   it("renders an enabled text_block section with its body", async () => {
     const html = await buildNewsletterHtml(
       baseIssue([
@@ -376,9 +440,12 @@ describe("buildNewsletterHtml", () => {
 });
 
 describe("exportNewsletterAsPdf", () => {
-  it("builds the HTML and passes it to renderHtmlToPdf", async () => {
+  it("builds the HTML and passes it to renderHtmlToPdf with tight margins for the multi-column grid", async () => {
     const pdf = await exportNewsletterAsPdf({ issue: baseIssue([]), ministry });
-    expect(mockRenderHtmlToPdf).toHaveBeenCalledWith(expect.stringContaining("KTM Ministries"));
+    expect(mockRenderHtmlToPdf).toHaveBeenCalledWith(
+      expect.stringContaining("KTM Ministries"),
+      expect.objectContaining({ margin: expect.any(Object) }),
+    );
     expect(pdf).toEqual(Buffer.from("fake-pdf"));
   });
 });

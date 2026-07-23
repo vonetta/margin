@@ -46,6 +46,18 @@ const formatDateRange = (startIso, endIso) => {
   return `${startLabel} - ${formatShortDate(endIso)}`;
 };
 
+// A small calendar-style "tear-off" date chip (month abbreviation over
+// day number) — the closest single-date shape to the reference's
+// colored date badges without needing a real calendar-grid component.
+const dateBadge = (iso, colors) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `<div class="date-badge" style="background:${colors.primary}">
+      <div class="date-badge-month">${MONTH_NAMES[d.getUTCMonth()].slice(0, 3).toUpperCase()}</div>
+      <div class="date-badge-day">${d.getUTCDate()}</div>
+    </div>`;
+};
+
 // Leader Message and The Scholar's Desk both reuse text_block with these
 // same optional fields rather than becoming two more bespoke section
 // types — a byline/title/subtitle/key-takeaways/pull-quote/signature
@@ -58,25 +70,25 @@ const renderTextBlock = (section) => {
     section.content || {};
   const takeaways = key_takeaways || [];
   return `
-    <div class="section">
-      <div class="section-title">${escapeHtml(section.title)}</div>
+    <div class="card">
+      <div class="card-title">${escapeHtml(section.title)}</div>
       ${byline ? `<div class="byline">${escapeHtml(byline)}</div>` : ""}
       ${photo_url ? `<img class="section-photo" src="${photo_url}" alt="" />` : ""}
       ${title ? `<div class="block-title">${escapeHtml(title)}</div>` : ""}
       ${subtitle ? `<div class="block-subtitle">${escapeHtml(subtitle)}</div>` : ""}
-      <div class="section-body">${escapeHtml(body || "")}</div>
+      <div class="card-body">${escapeHtml(body || "")}</div>
       ${
         takeaways.length > 0
           ? `<div class="takeaways">
                <div class="takeaways-title">Key Takeaways</div>
-               <ul>${takeaways.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>
+               <ul>${takeaways.map((t) => `<li><span class="check">✓</span>${escapeHtml(t)}</li>`).join("")}</ul>
              </div>`
           : ""
       }
       ${saying ? `<div class="saying">${escapeHtml(saying)}</div>` : ""}
       ${signature ? `<div class="signature">${escapeHtml(signature)}</div>` : ""}
       ${quote ? `<div class="pull-quote">${escapeHtml(quote)}</div>` : ""}
-      ${blog_note ? `<div class="blog-note">${escapeHtml(blog_note)}</div>` : ""}
+      ${blog_note ? `<div class="blog-note">🌐 ${escapeHtml(blog_note)}</div>` : ""}
     </div>`;
 };
 
@@ -84,51 +96,65 @@ const renderListBlock = (section) => {
   const items = section.content?.items || [];
   if (items.length === 0) return "";
   return `
-    <div class="section">
-      <div class="section-title">${escapeHtml(section.title)}</div>
-      <ul class="section-list">
+    <div class="card">
+      <div class="card-title">${escapeHtml(section.title)}</div>
+      <ul class="checklist">
         ${items
           .map(
             (item) =>
-              `<li><strong>${escapeHtml(item.heading || "")}</strong>${
+              `<li><span class="check">✓</span><span><strong>${escapeHtml(item.heading || "")}</strong>${
                 item.body ? ` — ${escapeHtml(item.body)}` : ""
-              }</li>`,
+              }</span></li>`,
           )
           .join("")}
       </ul>
     </div>`;
 };
 
-const renderBirthdays = (section) => {
+const renderBirthdays = (section, colors) => {
   const entries = section.content?.entries || [];
   if (entries.length === 0) return "";
   return `
-    <div class="section">
-      <div class="section-title">${escapeHtml(section.title)}</div>
-      <ul class="section-list">
+    <div class="card">
+      <div class="card-title">${escapeHtml(section.title)}</div>
+      <ul class="entry-list">
         ${entries
-          .map((e) => `<li>${escapeHtml(e.name)} — ${escapeHtml(formatDay(e.date))}</li>`)
+          .map(
+            (e) =>
+              `<li><span class="entry-icon" style="color:${colors.gold}">🎂</span> ${escapeHtml(
+                e.name,
+              )} <span class="entry-meta">${escapeHtml(formatDay(e.date))}</span></li>`,
+          )
           .join("")}
       </ul>
     </div>`;
 };
 
-const renderCalendar = (section) => {
+const renderCalendar = (section, colors) => {
   const entries = section.content?.entries || [];
   if (entries.length === 0) return "";
   return `
-    <div class="section">
-      <div class="section-title">${escapeHtml(section.title)}</div>
-      <ul class="section-list">
-        ${entries
-          .map((e) => {
-            const when = e.recurring_note || formatDateRange(e.start_date, e.end_date);
-            return `<li><strong>${escapeHtml(e.title)}</strong> — ${escapeHtml(when)}${
-              e.location ? ` · ${escapeHtml(e.location)}` : ""
-            }</li>`;
-          })
-          .join("")}
-      </ul>
+    <div class="card">
+      <div class="card-title">${escapeHtml(section.title)}</div>
+      ${entries
+        .map((e) => {
+          const badge = e.recurring_note
+            ? `<div class="date-badge" style="background:${colors.gold}"><div class="date-badge-month">↻</div><div class="date-badge-day-sm">${escapeHtml(
+                e.recurring_note,
+              )}</div></div>`
+            : dateBadge(e.start_date, colors) ||
+              `<div class="date-badge" style="background:${colors.primary}"><div class="date-badge-month">—</div></div>`;
+          const range = !e.recurring_note ? escapeHtml(formatDateRange(e.start_date, e.end_date)) : "";
+          return `
+            <div class="calendar-row">
+              ${badge}
+              <div class="calendar-details">
+                <div class="calendar-title">${escapeHtml(e.title)}</div>
+                <div class="entry-meta">${range}${e.location ? ` · ${escapeHtml(e.location)}` : ""}</div>
+              </div>
+            </div>`;
+        })
+        .join("")}
     </div>`;
 };
 
@@ -136,17 +162,17 @@ const renderSpotlight = (section) => {
   const { person_name, photo_url, bio, qa } = section.content || {};
   if (!person_name && !bio) return "";
   return `
-    <div class="section">
-      <div class="section-title">${escapeHtml(section.title)}</div>
+    <div class="card spotlight-card">
+      <div class="card-title">${escapeHtml(section.title)}</div>
       ${photo_url ? `<img class="section-photo-circle" src="${photo_url}" alt="" />` : ""}
       <div class="spotlight-name">${escapeHtml(person_name || "")}</div>
-      <div class="section-body">${escapeHtml(bio || "")}</div>
+      <div class="card-body">${escapeHtml(bio || "")}</div>
       ${(qa || [])
         .map(
           (item) =>
-            `<div class="qa-item"><strong>${escapeHtml(item.question)}</strong><div>${escapeHtml(
-              item.answer,
-            )}</div></div>`,
+            `<div class="qa-item"><div class="qa-question">${escapeHtml(
+              item.question,
+            )}</div><div>${escapeHtml(item.answer)}</div></div>`,
         )
         .join("")}
     </div>`;
@@ -155,7 +181,7 @@ const renderSpotlight = (section) => {
 // The only section whose render is genuinely async (QR generation) — a
 // failed QR is non-fatal, same "best-effort" posture as the flyer
 // background cut-out: the newsletter still renders, just without the code.
-const renderGiveCta = async (section) => {
+const renderGiveCta = async (section, colors) => {
   const { body, give_url } = section.content || {};
   let qrImg = "";
   if (give_url) {
@@ -167,27 +193,27 @@ const renderGiveCta = async (section) => {
     }
   }
   return `
-    <div class="section give-section">
-      <div class="section-title">${escapeHtml(section.title)}</div>
-      <div class="section-body">${escapeHtml(body || "")}</div>
+    <div class="card give-card" style="background:${colors.primary}">
+      <div class="card-title give-title">${escapeHtml(section.title)}</div>
+      <div class="card-body give-body">${escapeHtml(body || "")}</div>
       ${qrImg}
     </div>`;
 };
 
-const renderSection = async (section) => {
+const renderSection = async (section, colors) => {
   switch (section.type) {
     case "text_block":
       return renderTextBlock(section);
     case "list_block":
       return renderListBlock(section);
     case "birthdays":
-      return renderBirthdays(section);
+      return renderBirthdays(section, colors);
     case "calendar":
-      return renderCalendar(section);
+      return renderCalendar(section, colors);
     case "spotlight":
       return renderSpotlight(section);
     case "give_cta":
-      return renderGiveCta(section);
+      return renderGiveCta(section, colors);
     default:
       return "";
   }
@@ -195,67 +221,117 @@ const renderSection = async (section) => {
 
 const buildNewsletterHtml = async (issue, ministry) => {
   const colors = resolveColors(ministry?.branding);
-  const logo = renderLogo(ministry?.branding?.logo_url, 48);
+  const logo = renderLogo(ministry?.branding?.logo_url, 44);
   const monthLabel = MONTH_NAMES[issue.month - 1] || "";
 
   const orderedSections = [...issue.sections]
     .filter((s) => s.enabled)
     .sort((a, b) => a.order - b.order);
-  const sectionHtml = (await Promise.all(orderedSections.map(renderSection))).filter(Boolean).join("\n");
+  const sectionHtml = (await Promise.all(orderedSections.map((s) => renderSection(s, colors))))
+    .filter(Boolean)
+    .join("\n");
+  const toc = orderedSections.map((s) => escapeHtml(s.title)).join(" &nbsp;|&nbsp; ");
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
+<html><head><meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Georgia, serif; color: #1c1c1c; font-size: 11pt; line-height: 1.6; }
-    .masthead { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 3px solid ${colors.primary}; padding-bottom: 16px; margin-bottom: 24px; }
-    .masthead-title { font-size: 22pt; font-weight: bold; color: ${colors.primary}; letter-spacing: 0.04em; }
-    .masthead-sub { font-size: 10pt; color: ${colors.accent}; margin-top: 2px; }
-    .masthead-issue { text-align: right; font-size: 9pt; color: #666; }
-    .theme { font-size: 12pt; font-weight: bold; color: ${colors.gold}; margin-top: 2px; }
-    .section { break-inside: avoid; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #e0e0e0; }
-    .section-title { font-size: 10pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: ${colors.primary}; margin-bottom: 8px; }
-    .section-body { white-space: pre-wrap; word-wrap: break-word; }
-    .section-photo { max-width: 160px; border-radius: 6px; margin-bottom: 10px; }
-    .section-photo-circle { width: 100px; height: 100px; object-fit: cover; border-radius: 50%; margin-bottom: 10px; }
-    .spotlight-name { font-size: 13pt; font-weight: bold; color: ${colors.primary}; margin-bottom: 6px; }
-    .qa-item { margin-top: 8px; }
-    .byline { font-size: 9pt; font-style: italic; color: #666; margin-bottom: 8px; }
-    .block-title { font-size: 15pt; font-weight: bold; color: ${colors.primary}; margin-bottom: 4px; }
-    .block-subtitle { font-size: 10pt; font-weight: bold; color: #555; margin-bottom: 10px; }
-    .takeaways { background: #f8f7f5; border-radius: 6px; padding: 12px 16px; margin: 12px 0; }
-    .takeaways-title { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 6px; }
-    .takeaways ul { padding-left: 18px; }
-    .takeaways li { margin-bottom: 4px; }
+    body { font-family: "Montserrat", Georgia, serif; color: #1c1c1c; font-size: 10.5pt; line-height: 1.6; }
+
+    .masthead { background: ${colors.primary}; color: #fff; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .masthead-left { display: flex; align-items: center; gap: 12px; }
+    .logo { height: 44px; }
+    .masthead-title { font-family: "Cinzel", Georgia, serif; font-size: 21pt; font-weight: 600; letter-spacing: 0.04em; }
+    .masthead-sub { font-size: 8.5pt; color: ${colors.gold}; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px; }
+    .masthead-right { text-align: right; }
+    .masthead-issue { font-size: 8.5pt; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+    .masthead-theme-label { font-size: 7.5pt; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; margin-top: 6px; }
+    .masthead-theme { font-family: "Cinzel", Georgia, serif; font-size: 13pt; font-weight: 600; color: ${colors.gold}; }
+
+    .toc { background: ${colors.gold}; color: #1c1c1c; font-size: 8pt; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 24px; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; padding: 22px 24px; }
+
+    .card { break-inside: avoid; background: #fff; border: 0.5px solid #e5e2da; border-radius: 8px; padding: 16px; border-top: 3px solid ${colors.primary}; }
+    .card-title { font-family: "Cinzel", Georgia, serif; font-size: 9.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 10px; }
+    .card-body { white-space: pre-wrap; word-wrap: break-word; }
+
+    .byline { font-size: 8.5pt; font-style: italic; color: #777; margin-bottom: 8px; margin-top: -6px; }
+    .section-photo { max-width: 100%; border-radius: 6px; margin-bottom: 10px; }
+    .section-photo-circle { width: 90px; height: 90px; object-fit: cover; border-radius: 50%; margin: 0 auto 10px; display: block; border: 3px solid ${colors.gold}; }
+    .spotlight-card { text-align: center; }
+    .spotlight-name { font-family: "Cinzel", Georgia, serif; font-size: 12pt; font-weight: 600; color: ${colors.primary}; margin-bottom: 6px; }
+    .qa-item { margin-top: 10px; text-align: left; font-size: 9.5pt; }
+    .qa-question { font-weight: 700; color: ${colors.primary}; }
+
+    .block-title { font-size: 14pt; font-weight: 700; color: ${colors.primary}; margin-bottom: 4px; }
+    .block-subtitle { font-size: 9.5pt; font-weight: 600; color: #555; margin-bottom: 10px; }
+
+    .takeaways { background: #fdf8ec; border: 0.5px solid ${colors.gold}; border-radius: 6px; padding: 12px 14px; margin: 12px 0; }
+    .takeaways-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 6px; }
+    .takeaways ul, .checklist { list-style: none; }
+    .takeaways li, .checklist li { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; font-size: 9.5pt; }
+    .check { color: ${colors.gold}; font-weight: 700; flex-shrink: 0; }
+
     .saying { font-style: italic; margin-top: 10px; color: ${colors.primary}; }
-    .signature { font-style: italic; font-weight: bold; font-size: 13pt; margin-top: 4px; color: ${colors.primary}; }
-    .pull-quote { background: ${colors.primary}; color: #fff; font-weight: bold; text-align: center; padding: 16px; border-radius: 6px; margin-top: 14px; font-size: 11pt; }
-    .blog-note { background: #f0ede8; border-radius: 6px; padding: 10px 14px; margin-top: 12px; font-size: 9.5pt; }
-    .section-list { list-style: none; }
-    .section-list li { padding: 4px 0; border-bottom: 1px dotted #ddd; }
-    .give-section { text-align: center; }
-    .qr { width: 100px; height: 100px; margin-top: 12px; }
-    .footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #888; text-align: center; }
+    .signature { font-style: italic; font-weight: 700; font-size: 13pt; margin-top: 4px; color: ${colors.primary}; }
+    .pull-quote { background: ${colors.primary}; color: #fff; font-weight: 700; text-align: center; padding: 14px; border-radius: 6px; margin-top: 14px; font-size: 10pt; line-height: 1.5; }
+    .blog-note { background: #f0ede8; border-radius: 6px; padding: 10px 12px; margin-top: 12px; font-size: 8.5pt; }
+
+    .entry-list { list-style: none; }
+    .entry-list li { padding: 5px 0; border-bottom: 1px dotted #ddd; font-size: 9.5pt; }
+    .entry-list li:last-child { border-bottom: none; }
+    .entry-icon { margin-right: 4px; }
+    .entry-meta { color: #777; font-size: 8.5pt; float: right; }
+
+    .calendar-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dotted #ddd; }
+    .calendar-row:last-child { border-bottom: none; }
+    .date-badge { color: #fff; border-radius: 5px; width: 42px; height: 42px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .date-badge-month { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.04em; }
+    .date-badge-day { font-size: 13pt; font-weight: 700; line-height: 1; }
+    .date-badge-day-sm { font-size: 6pt; font-weight: 600; text-align: center; line-height: 1.1; }
+    .calendar-title { font-weight: 700; font-size: 9.5pt; }
+
+    .give-card { color: #fff; text-align: center; }
+    .give-title { color: #fff; }
+    .give-body { margin-bottom: 10px; }
+    .qr { width: 90px; height: 90px; margin-top: 4px; background: #fff; padding: 6px; border-radius: 6px; }
+
+    .footer { background: ${colors.primary}; color: rgba(255,255,255,0.75); padding: 10px 24px; font-size: 7.5pt; text-align: center; letter-spacing: 0.04em; text-transform: uppercase; }
   </style></head>
   <body>
     <div class="masthead">
-      <div>
+      <div class="masthead-left">
         ${logo}
-        <div class="masthead-title">${escapeHtml(ministry?.name || "")} Journal</div>
-        <div class="masthead-sub">${escapeHtml(ministry?.tagline || "")}</div>
+        <div>
+          <div class="masthead-title">${escapeHtml(ministry?.name || "")} Journal</div>
+          ${ministry?.tagline ? `<div class="masthead-sub">${escapeHtml(ministry.tagline)}</div>` : ""}
+        </div>
       </div>
-      <div class="masthead-issue">
-        ${escapeHtml(monthLabel)} ${issue.year}
-        ${issue.theme ? `<div class="theme">${escapeHtml(issue.theme)}</div>` : ""}
+      <div class="masthead-right">
+        <div class="masthead-issue">${escapeHtml(monthLabel)} ${issue.year}</div>
+        ${
+          issue.theme
+            ? `<div class="masthead-theme-label">This month's theme</div><div class="masthead-theme">${escapeHtml(issue.theme)}</div>`
+            : ""
+        }
       </div>
     </div>
-    ${sectionHtml}
+    ${toc ? `<div class="toc">Inside this issue: ${toc}</div>` : ""}
+    <div class="grid">
+      ${sectionHtml}
+    </div>
     <div class="footer">${escapeHtml(ministry?.name || "")} · ${escapeHtml(monthLabel)} ${issue.year}</div>
   </body></html>`;
 };
 
 const exportNewsletterAsPdf = async ({ issue, ministry }) => {
   const html = await buildNewsletterHtml(issue, ministry);
-  return renderHtmlToPdf(html);
+  return renderHtmlToPdf(html, {
+    margin: { top: "0.3in", bottom: "0.3in", left: "0.3in", right: "0.3in" },
+  });
 };
 
 module.exports = { buildNewsletterHtml, exportNewsletterAsPdf };
