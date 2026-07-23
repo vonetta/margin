@@ -25,6 +25,7 @@ const publicInviteRoutes = require("./routes/publicInvites");
 const socialAuthRoutes = require("./routes/socialAuth");
 const publicSocialCallbackRoutes = require("./routes/publicSocialCallback");
 const socialPostRoutes = require("./routes/socialPosts");
+const newsletterRoutes = require("./routes/newsletter");
 const { rehydrateScheduledPosts } = require("./services/socialPostScheduler");
 const { sweepTaskReminders } = require("./services/taskReminderService");
 const { checkMongo, checkAi } = require("./services/healthService");
@@ -156,6 +157,7 @@ app.use("/api/meetings", meetingRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/invites", inviteRoutes);
 app.use("/api/social", socialAuthRoutes);
+app.use("/api/newsletter", newsletterRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({ ministry: req.ministryId });
