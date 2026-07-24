@@ -235,6 +235,16 @@ const buildNewsletterHtml = async (issue, ministry, { forEmail = false } = {}) =
     .filter(Boolean)
     .join("\n");
   const tocItems = orderedSections.map((s) => `<div>${escapeHtml(s.title)}</div>`).join("\n");
+  // Only rendered for forEmail — the print PDF's page-break engine doesn't
+  // fragment reliably around a masthead photo grid, so it stays PDF-free
+  // to avoid reintroducing that bug. A scrolling email has no such risk.
+  const coverPhotosHtml = forEmail
+    ? (issue.cover_photos || [])
+        .filter(Boolean)
+        .slice(0, 4)
+        .map((url) => `<img class="masthead-photo" src="${escapeHtml(url)}" alt="" />`)
+        .join("\n")
+    : "";
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -244,47 +254,49 @@ const buildNewsletterHtml = async (issue, ministry, { forEmail = false } = {}) =
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: "Montserrat", Georgia, serif; color: #1c1c1c; font-size: 10.5pt; line-height: 1.6; }
 
-    .masthead { background: ${colors.primary}; color: #fff; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-    .masthead-left { display: flex; align-items: center; gap: 12px; }
-    .logo { height: 44px; }
-    .masthead-title { font-family: "Cinzel", Georgia, serif; font-size: 21pt; font-weight: 600; letter-spacing: 0.04em; }
-    .masthead-sub { font-size: 8.5pt; color: ${colors.gold}; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px; }
-    .masthead-right { text-align: right; }
-    .masthead-issue { font-size: 8.5pt; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
-    .masthead-theme-label { font-size: 7.5pt; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; margin-top: 6px; }
-    .masthead-theme { font-family: "Cinzel", Georgia, serif; font-size: 13pt; font-weight: 600; color: ${colors.gold}; }
+    .masthead { background: ${colors.primary}; color: #fff; padding: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+    .masthead-main { flex: 1; min-width: 220px; }
+    .masthead-issue { font-size: 8pt; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6; margin-bottom: 10px; }
+    .masthead-title-row { display: flex; align-items: center; gap: 10px; }
+    .logo { height: 40px; }
+    .masthead-title { font-family: "Cinzel", Georgia, serif; font-size: 26pt; font-weight: 600; letter-spacing: 0.02em; line-height: 1.15; }
+    .masthead-theme { font-family: Georgia, serif; font-style: italic; font-size: 14pt; font-weight: 400; color: ${colors.accent}; margin-top: 8px; }
+    .masthead-sub { font-size: 8pt; color: rgba(255,255,255,0.8); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 12px; }
+    .masthead-photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; width: 240px; flex-shrink: 0; }
+    .masthead-photo { width: 100%; height: 78px; object-fit: cover; object-position: center 20%; border-radius: 4px; display: block; }
+    .masthead-divider { height: 4px; background: ${colors.accent}; }
 
     .cover { ${forEmail ? "" : "min-height: 10.4in; break-after: page;"} display: flex; flex-direction: column; }
     .cover-toc { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fdf8ec; padding: 40px 24px; }
-    .cover-toc-title { font-family: "Cinzel", Georgia, serif; font-size: 11pt; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: ${colors.primary}; margin-bottom: 24px; }
+    .cover-toc-title { font-family: "Cinzel", Georgia, serif; font-size: 11pt; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: ${colors.accent}; margin-bottom: 24px; }
     .cover-toc-list { columns: 2; column-gap: 40px; text-align: left; font-size: 10.5pt; }
     .cover-toc-list div { break-inside: avoid; padding: 6px 0; border-bottom: 1px dotted #ddd; }
 
     .grid { column-count: 2; column-gap: 18px; padding: 22px 24px; }
 
-    .card { display: inline-block; width: 100%; padding-top: 12px; border-top: 3px solid ${colors.primary}; margin-bottom: 28px; }
-    .card-title { font-family: "Cinzel", Georgia, serif; font-size: 10pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: ${colors.primary}; margin-bottom: 12px; break-after: avoid; }
+    .card { display: inline-block; width: 100%; padding-top: 12px; border-top: 3px solid ${colors.accent}; margin-bottom: 28px; }
+    .card-title { font-family: "Montserrat", sans-serif; font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: ${colors.accent}; margin-bottom: 12px; break-after: avoid; }
     .card-body { white-space: pre-wrap; word-wrap: break-word; }
 
     .byline { font-size: 8.5pt; font-style: italic; color: #777; margin-bottom: 8px; margin-top: -6px; }
     .section-photo { max-width: 100%; border-radius: 6px; margin-bottom: 10px; }
     .section-photo-circle { width: 90px; height: 90px; object-fit: cover; border-radius: 50%; margin: 0 auto 10px; display: block; border: 3px solid ${colors.gold}; }
     .spotlight-card { break-inside: avoid; text-align: center; }
-    .spotlight-name { font-family: "Cinzel", Georgia, serif; font-size: 12pt; font-weight: 600; color: ${colors.primary}; margin-bottom: 6px; }
+    .spotlight-name { font-family: "Cinzel", Georgia, serif; font-size: 12pt; font-weight: 600; color: ${colors.accent}; margin-bottom: 6px; }
     .qa-item { break-inside: avoid; margin-top: 10px; text-align: left; font-size: 9.5pt; }
-    .qa-question { font-weight: 700; color: ${colors.primary}; }
+    .qa-question { font-weight: 700; color: ${colors.accent}; }
 
-    .block-title { font-size: 14pt; font-weight: 700; color: ${colors.primary}; margin-bottom: 4px; }
+    .block-title { font-size: 14pt; font-weight: 700; color: ${colors.accent}; margin-bottom: 4px; }
     .block-subtitle { font-size: 9.5pt; font-weight: 600; color: #555; margin-bottom: 10px; }
 
     .takeaways { break-inside: avoid; background: #fdf8ec; border: 0.5px solid ${colors.gold}; border-radius: 6px; padding: 12px 14px; margin: 12px 0; }
-    .takeaways-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 6px; }
+    .takeaways-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.accent}; margin-bottom: 6px; }
     .takeaways ul, .checklist { list-style: none; }
     .takeaways li, .checklist li { break-inside: avoid; display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; font-size: 9.5pt; }
     .check { color: ${colors.gold}; font-weight: 700; flex-shrink: 0; }
 
-    .saying { font-style: italic; margin-top: 10px; color: ${colors.primary}; }
-    .signature { font-style: italic; font-weight: 700; font-size: 13pt; margin-top: 4px; color: ${colors.primary}; }
+    .saying { font-style: italic; margin-top: 10px; color: ${colors.accent}; }
+    .signature { font-style: italic; font-weight: 700; font-size: 13pt; margin-top: 4px; color: ${colors.accent}; }
     .pull-quote { break-inside: avoid; background: ${colors.primary}; color: #fff; font-weight: 700; text-align: center; padding: 14px; border-radius: 6px; margin-top: 14px; font-size: 10pt; line-height: 1.5; }
     .blog-note { break-inside: avoid; background: #f0ede8; border-radius: 6px; padding: 10px 12px; margin-top: 12px; font-size: 8.5pt; }
 
@@ -312,24 +324,20 @@ const buildNewsletterHtml = async (issue, ministry, { forEmail = false } = {}) =
   <body>
     <div class="cover">
       <div class="masthead">
-        <div class="masthead-left">
-          ${logo}
-          <div>
-            <div class="masthead-title">${escapeHtml(ministry?.name || "")} Journal</div>
-            ${ministry?.tagline ? `<div class="masthead-sub">${escapeHtml(ministry.tagline)}</div>` : ""}
-          </div>
-        </div>
-        <div class="masthead-right">
+        <div class="masthead-main">
           <div class="masthead-issue">${escapeHtml(monthLabel)} ${issue.year}</div>
-          ${
-            issue.theme
-              ? `<div class="masthead-theme-label">This month's theme</div><div class="masthead-theme">${escapeHtml(issue.theme)}</div>`
-              : ""
-          }
+          <div class="masthead-title-row">
+            ${logo}
+            <div class="masthead-title">${escapeHtml(ministry?.name || "")} Journal</div>
+          </div>
+          ${issue.theme ? `<div class="masthead-theme">${escapeHtml(issue.theme)}</div>` : ""}
+          ${ministry?.tagline ? `<div class="masthead-sub">${escapeHtml(ministry.tagline)}</div>` : ""}
         </div>
+        ${coverPhotosHtml ? `<div class="masthead-photos">${coverPhotosHtml}</div>` : ""}
       </div>
+      <div class="masthead-divider"></div>
       ${
-        tocItems
+        !forEmail && tocItems
           ? `<div class="cover-toc"><div class="cover-toc-title">Inside This Issue</div><div class="cover-toc-list">${tocItems}</div></div>`
           : ""
       }

@@ -26,6 +26,9 @@ const newsletterIssueSchema = new mongoose.Schema({
   month: { type: Number, required: true, min: 1, max: 12 },
   year: { type: Number, required: true },
   theme: { type: String, trim: true },
+  // Masthead photo collage — only rendered in the HTML/email export (see
+  // newsletterExportService's forEmail flag), never the print PDF.
+  cover_photos: [{ type: String, trim: true }],
   // Only one value today — Phase 2 adds more templates to choose from,
   // at which point this becomes a real choice rather than a fixed default.
   template: { type: String, enum: ["classic"], default: "classic" },

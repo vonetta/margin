@@ -187,6 +187,19 @@ describe("PUT /api/newsletter/issues/:id", () => {
     expect(res.body.sections[0].content.body).toBe("Hello church");
   });
 
+  it("updates cover photos", async () => {
+    const issue = await NewsletterIssue.create({ ministry_id: "nl-route-test", month: 7, year: 2026, sections: [] });
+
+    const res = await request(app)
+      .put(`/api/newsletter/issues/${issue._id}`)
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ cover_photos: ["https://example.com/a.jpg", "https://example.com/b.jpg"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.cover_photos).toEqual(["https://example.com/a.jpg", "https://example.com/b.jpg"]);
+  });
+
   it("rejects updates by a team member", async () => {
     const issue = await NewsletterIssue.create({ ministry_id: "nl-route-test", month: 7, year: 2026, sections: [] });
 

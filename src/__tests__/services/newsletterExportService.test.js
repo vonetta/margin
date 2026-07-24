@@ -59,6 +59,28 @@ describe("buildNewsletterHtml", () => {
     expect(html.split("Inside This Issue")[1] || "").not.toContain("From the Leader");
   });
 
+  it("omits the Inside This Issue cover panel for the email export", async () => {
+    const html = await buildNewsletterHtml(baseIssue([]), ministry, { forEmail: true });
+    expect(html).not.toContain("Inside This Issue");
+  });
+
+  it("renders a masthead photo collage only for the email export", async () => {
+    const issue = { ...baseIssue([]), cover_photos: ["https://example.com/a.jpg", "https://example.com/b.jpg"] };
+
+    const emailHtml = await buildNewsletterHtml(issue, ministry, { forEmail: true });
+    expect(emailHtml).toContain('class="masthead-photos"');
+    expect(emailHtml).toContain('src="https://example.com/a.jpg"');
+
+    const printHtml = await buildNewsletterHtml(issue, ministry, { forEmail: false });
+    expect(printHtml).not.toContain('class="masthead-photos"');
+  });
+
+  it("caps the masthead photo collage at 4 photos", async () => {
+    const cover_photos = Array.from({ length: 9 }, (_, i) => `https://example.com/${i}.jpg`);
+    const html = await buildNewsletterHtml({ ...baseIssue([]), cover_photos }, ministry, { forEmail: true });
+    expect((html.match(/class="masthead-photo"/g) || []).length).toBe(4);
+  });
+
   it("renders a date badge for a same-day calendar entry", async () => {
     const html = await buildNewsletterHtml(
       baseIssue([

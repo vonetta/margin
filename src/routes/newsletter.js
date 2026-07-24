@@ -87,6 +87,7 @@ router.put(
     body("theme").optional().trim(),
     body("status").optional().isIn(["draft", "finalized"]),
     body("sections").optional().isArray(),
+    body("cover_photos").optional().isArray(),
   ],
   validate,
   async (req, res) => {
@@ -95,6 +96,7 @@ router.put(
       if (req.body.theme !== undefined) updates.theme = req.body.theme;
       if (req.body.status !== undefined) updates.status = req.body.status;
       if (req.body.sections !== undefined) updates.sections = req.body.sections;
+      if (req.body.cover_photos !== undefined) updates.cover_photos = req.body.cover_photos;
 
       const issue = await NewsletterIssue.findOneAndUpdate(
         { _id: req.params.id, ministry_id: req.ministryId },
