@@ -44,7 +44,7 @@ describe("buildNewsletterHtml", () => {
       ]),
       ministry,
     );
-    expect(html).toContain("Inside this issue");
+    expect(html).toContain("Inside This Issue");
     expect(html).toContain("From the Leader");
     expect(html).toContain("Ministry Milestones");
   });
@@ -56,7 +56,7 @@ describe("buildNewsletterHtml", () => {
       ]),
       ministry,
     );
-    expect(html.split("Inside this issue")[1] || "").not.toContain("From the Leader");
+    expect(html.split("Inside This Issue")[1] || "").not.toContain("From the Leader");
   });
 
   it("renders a date badge for a same-day calendar entry", async () => {

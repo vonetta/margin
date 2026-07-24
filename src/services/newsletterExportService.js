@@ -230,7 +230,7 @@ const buildNewsletterHtml = async (issue, ministry) => {
   const sectionHtml = (await Promise.all(orderedSections.map((s) => renderSection(s, colors))))
     .filter(Boolean)
     .join("\n");
-  const toc = orderedSections.map((s) => escapeHtml(s.title)).join(" &nbsp;|&nbsp; ");
+  const tocItems = orderedSections.map((s) => `<div>${escapeHtml(s.title)}</div>`).join("\n");
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -250,43 +250,47 @@ const buildNewsletterHtml = async (issue, ministry) => {
     .masthead-theme-label { font-size: 7.5pt; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; margin-top: 6px; }
     .masthead-theme { font-family: "Cinzel", Georgia, serif; font-size: 13pt; font-weight: 600; color: ${colors.gold}; }
 
-    .toc { background: ${colors.gold}; color: #1c1c1c; font-size: 8pt; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 24px; }
+    .cover { min-height: 10.4in; display: flex; flex-direction: column; break-after: page; }
+    .cover-toc { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fdf8ec; padding: 40px 24px; }
+    .cover-toc-title { font-family: "Cinzel", Georgia, serif; font-size: 11pt; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: ${colors.primary}; margin-bottom: 24px; }
+    .cover-toc-list { columns: 2; column-gap: 40px; text-align: left; font-size: 10.5pt; }
+    .cover-toc-list div { break-inside: avoid; padding: 6px 0; border-bottom: 1px dotted #ddd; }
 
     .grid { column-count: 2; column-gap: 18px; padding: 22px 24px; }
 
-    .card { break-inside: avoid; display: inline-block; width: 100%; background: #fff; border: 0.5px solid #e5e2da; border-radius: 8px; padding: 16px; border-top: 3px solid ${colors.primary}; margin-bottom: 18px; }
-    .card-title { font-family: "Cinzel", Georgia, serif; font-size: 9.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 10px; }
+    .card { display: inline-block; width: 100%; background: #fff; border: 0.5px solid #e5e2da; border-radius: 8px; padding: 16px; border-top: 3px solid ${colors.primary}; margin-bottom: 18px; }
+    .card-title { font-family: "Cinzel", Georgia, serif; font-size: 9.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 10px; break-after: avoid; }
     .card-body { white-space: pre-wrap; word-wrap: break-word; }
 
     .byline { font-size: 8.5pt; font-style: italic; color: #777; margin-bottom: 8px; margin-top: -6px; }
     .section-photo { max-width: 100%; border-radius: 6px; margin-bottom: 10px; }
     .section-photo-circle { width: 90px; height: 90px; object-fit: cover; border-radius: 50%; margin: 0 auto 10px; display: block; border: 3px solid ${colors.gold}; }
-    .spotlight-card { text-align: center; }
+    .spotlight-card { break-inside: avoid; text-align: center; }
     .spotlight-name { font-family: "Cinzel", Georgia, serif; font-size: 12pt; font-weight: 600; color: ${colors.primary}; margin-bottom: 6px; }
-    .qa-item { margin-top: 10px; text-align: left; font-size: 9.5pt; }
+    .qa-item { break-inside: avoid; margin-top: 10px; text-align: left; font-size: 9.5pt; }
     .qa-question { font-weight: 700; color: ${colors.primary}; }
 
     .block-title { font-size: 14pt; font-weight: 700; color: ${colors.primary}; margin-bottom: 4px; }
     .block-subtitle { font-size: 9.5pt; font-weight: 600; color: #555; margin-bottom: 10px; }
 
-    .takeaways { background: #fdf8ec; border: 0.5px solid ${colors.gold}; border-radius: 6px; padding: 12px 14px; margin: 12px 0; }
+    .takeaways { break-inside: avoid; background: #fdf8ec; border: 0.5px solid ${colors.gold}; border-radius: 6px; padding: 12px 14px; margin: 12px 0; }
     .takeaways-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: ${colors.primary}; margin-bottom: 6px; }
     .takeaways ul, .checklist { list-style: none; }
-    .takeaways li, .checklist li { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; font-size: 9.5pt; }
+    .takeaways li, .checklist li { break-inside: avoid; display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; font-size: 9.5pt; }
     .check { color: ${colors.gold}; font-weight: 700; flex-shrink: 0; }
 
     .saying { font-style: italic; margin-top: 10px; color: ${colors.primary}; }
     .signature { font-style: italic; font-weight: 700; font-size: 13pt; margin-top: 4px; color: ${colors.primary}; }
-    .pull-quote { background: ${colors.primary}; color: #fff; font-weight: 700; text-align: center; padding: 14px; border-radius: 6px; margin-top: 14px; font-size: 10pt; line-height: 1.5; }
-    .blog-note { background: #f0ede8; border-radius: 6px; padding: 10px 12px; margin-top: 12px; font-size: 8.5pt; }
+    .pull-quote { break-inside: avoid; background: ${colors.primary}; color: #fff; font-weight: 700; text-align: center; padding: 14px; border-radius: 6px; margin-top: 14px; font-size: 10pt; line-height: 1.5; }
+    .blog-note { break-inside: avoid; background: #f0ede8; border-radius: 6px; padding: 10px 12px; margin-top: 12px; font-size: 8.5pt; }
 
     .entry-list { list-style: none; }
-    .entry-list li { padding: 5px 0; border-bottom: 1px dotted #ddd; font-size: 9.5pt; }
+    .entry-list li { break-inside: avoid; padding: 5px 0; border-bottom: 1px dotted #ddd; font-size: 9.5pt; }
     .entry-list li:last-child { border-bottom: none; }
     .entry-icon { margin-right: 4px; }
     .entry-meta { color: #777; font-size: 8.5pt; float: right; }
 
-    .calendar-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dotted #ddd; }
+    .calendar-row { break-inside: avoid; display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dotted #ddd; }
     .calendar-row:last-child { border-bottom: none; }
     .date-badge { color: #fff; border-radius: 5px; width: 42px; height: 42px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
     .date-badge-month { font-size: 6.5pt; font-weight: 700; letter-spacing: 0.04em; }
@@ -294,7 +298,7 @@ const buildNewsletterHtml = async (issue, ministry) => {
     .date-badge-day-sm { font-size: 6pt; font-weight: 600; text-align: center; line-height: 1.1; }
     .calendar-title { font-weight: 700; font-size: 9.5pt; }
 
-    .give-card { color: #fff; text-align: center; }
+    .give-card { break-inside: avoid; color: #fff; text-align: center; }
     .give-title { color: #fff; }
     .give-body { margin-bottom: 10px; }
     .qr { width: 90px; height: 90px; margin-top: 4px; background: #fff; padding: 6px; border-radius: 6px; }
@@ -302,24 +306,30 @@ const buildNewsletterHtml = async (issue, ministry) => {
     .footer { background: ${colors.primary}; color: rgba(255,255,255,0.75); padding: 10px 24px; font-size: 7.5pt; text-align: center; letter-spacing: 0.04em; text-transform: uppercase; }
   </style></head>
   <body>
-    <div class="masthead">
-      <div class="masthead-left">
-        ${logo}
-        <div>
-          <div class="masthead-title">${escapeHtml(ministry?.name || "")} Journal</div>
-          ${ministry?.tagline ? `<div class="masthead-sub">${escapeHtml(ministry.tagline)}</div>` : ""}
+    <div class="cover">
+      <div class="masthead">
+        <div class="masthead-left">
+          ${logo}
+          <div>
+            <div class="masthead-title">${escapeHtml(ministry?.name || "")} Journal</div>
+            ${ministry?.tagline ? `<div class="masthead-sub">${escapeHtml(ministry.tagline)}</div>` : ""}
+          </div>
+        </div>
+        <div class="masthead-right">
+          <div class="masthead-issue">${escapeHtml(monthLabel)} ${issue.year}</div>
+          ${
+            issue.theme
+              ? `<div class="masthead-theme-label">This month's theme</div><div class="masthead-theme">${escapeHtml(issue.theme)}</div>`
+              : ""
+          }
         </div>
       </div>
-      <div class="masthead-right">
-        <div class="masthead-issue">${escapeHtml(monthLabel)} ${issue.year}</div>
-        ${
-          issue.theme
-            ? `<div class="masthead-theme-label">This month's theme</div><div class="masthead-theme">${escapeHtml(issue.theme)}</div>`
-            : ""
-        }
-      </div>
+      ${
+        tocItems
+          ? `<div class="cover-toc"><div class="cover-toc-title">Inside This Issue</div><div class="cover-toc-list">${tocItems}</div></div>`
+          : ""
+      }
     </div>
-    ${toc ? `<div class="toc">Inside this issue: ${toc}</div>` : ""}
     <div class="grid">
       ${sectionHtml}
     </div>
