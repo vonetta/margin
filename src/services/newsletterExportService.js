@@ -219,7 +219,11 @@ const renderSection = async (section, colors) => {
   }
 };
 
-const buildNewsletterHtml = async (issue, ministry) => {
+// forEmail skips the cover's forced full-page height/break-after: a print
+// PDF needs the cover pinned to exactly one page so section content starts
+// cleanly on page 2, but an email has no pages to break across — that same
+// forced height would just leave a huge dead gap in the middle of the message.
+const buildNewsletterHtml = async (issue, ministry, { forEmail = false } = {}) => {
   const colors = resolveColors(ministry?.branding);
   const logo = renderLogo(ministry?.branding?.logo_url, 44);
   const monthLabel = MONTH_NAMES[issue.month - 1] || "";
@@ -250,7 +254,7 @@ const buildNewsletterHtml = async (issue, ministry) => {
     .masthead-theme-label { font-size: 7.5pt; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; margin-top: 6px; }
     .masthead-theme { font-family: "Cinzel", Georgia, serif; font-size: 13pt; font-weight: 600; color: ${colors.gold}; }
 
-    .cover { min-height: 10.4in; display: flex; flex-direction: column; break-after: page; }
+    .cover { ${forEmail ? "" : "min-height: 10.4in; break-after: page;"} display: flex; flex-direction: column; }
     .cover-toc { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fdf8ec; padding: 40px 24px; }
     .cover-toc-title { font-family: "Cinzel", Georgia, serif; font-size: 11pt; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: ${colors.primary}; margin-bottom: 24px; }
     .cover-toc-list { columns: 2; column-gap: 40px; text-align: left; font-size: 10.5pt; }
@@ -344,4 +348,8 @@ const exportNewsletterAsPdf = async ({ issue, ministry }) => {
   });
 };
 
-module.exports = { buildNewsletterHtml, exportNewsletterAsPdf };
+// For pasting into Mailchimp — no PDF pagination involved, just the raw
+// HTML the issue's content assembles into.
+const exportNewsletterAsHtml = async ({ issue, ministry }) => buildNewsletterHtml(issue, ministry, { forEmail: true });
+
+module.exports = { buildNewsletterHtml, exportNewsletterAsPdf, exportNewsletterAsHtml };

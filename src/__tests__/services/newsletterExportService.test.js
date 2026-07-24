@@ -8,7 +8,7 @@ jest.mock("../../services/qrService", () => ({
   generateQRCode: (...args) => mockGenerateQRCode(...args),
 }));
 
-const { buildNewsletterHtml, exportNewsletterAsPdf } = require("../../services/newsletterExportService");
+const { buildNewsletterHtml, exportNewsletterAsPdf, exportNewsletterAsHtml } = require("../../services/newsletterExportService");
 
 const ministry = {
   name: "KTM Ministries",
@@ -447,5 +447,19 @@ describe("exportNewsletterAsPdf", () => {
       expect.objectContaining({ margin: expect.any(Object) }),
     );
     expect(pdf).toEqual(Buffer.from("fake-pdf"));
+  });
+});
+
+describe("exportNewsletterAsHtml", () => {
+  it("returns raw HTML, not a rendered PDF", async () => {
+    const html = await exportNewsletterAsHtml({ issue: baseIssue([]), ministry });
+    expect(html).toContain("KTM Ministries");
+    expect(mockRenderHtmlToPdf).not.toHaveBeenCalled();
+  });
+
+  it("skips the print-only full-page cover height so an email has no dead gap", async () => {
+    const html = await exportNewsletterAsHtml({ issue: baseIssue([]), ministry });
+    expect(html).not.toContain("min-height: 10.4in");
+    expect(html).not.toContain("break-after: page");
   });
 });

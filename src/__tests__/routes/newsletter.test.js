@@ -242,6 +242,48 @@ describe("GET /api/newsletter/issues/:id/export", () => {
   });
 });
 
+describe("GET /api/newsletter/issues/:id/export-html", () => {
+  it("streams HTML for the issue, for pasting into Mailchimp", async () => {
+    const issue = await NewsletterIssue.create({
+      ministry_id: "nl-route-test",
+      month: 7,
+      year: 2026,
+      sections: [
+        { key: "leader_message", type: "text_block", title: "From the Leader", order: 0, enabled: true, content: { body: "Hi" } },
+      ],
+    });
+
+    const res = await request(app)
+      .get(`/api/newsletter/issues/${issue._id}/export-html`)
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("text/html; charset=utf-8");
+    expect(res.headers["content-disposition"]).toContain("newsletter-2026-07.html");
+    expect(res.text).toContain("From the Leader");
+  });
+
+  it("returns 404 for a nonexistent issue", async () => {
+    const res = await request(app)
+      .get("/api/newsletter/issues/000000000000000000000000/export-html")
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects a team member", async () => {
+    const issue = await NewsletterIssue.create({ ministry_id: "nl-route-test", month: 7, year: 2026, sections: [] });
+
+    const res = await request(app)
+      .get(`/api/newsletter/issues/${issue._id}/export-html`)
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+
+    expect(res.status).toBe(403);
+  });
+});
+
 describe("DELETE /api/newsletter/issues/:id", () => {
   it("deletes an issue", async () => {
     const issue = await NewsletterIssue.create({ ministry_id: "nl-route-test", month: 7, year: 2026, sections: [] });

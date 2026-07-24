@@ -4,7 +4,7 @@ const { body, validationResult } = require("express-validator");
 const NewsletterIssue = require("../models/NewsletterIssue");
 const { requireRole } = require("../middleware/auth");
 const { buildDefaultSections } = require("../services/newsletterService");
-const { exportNewsletterAsPdf } = require("../services/newsletterExportService");
+const { exportNewsletterAsPdf, exportNewsletterAsHtml } = require("../services/newsletterExportService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -129,6 +129,27 @@ router.get("/issues/:id/export", async (req, res) => {
     res.send(pdf);
   } catch (error) {
     res.status(500).json({ error: "Failed to export newsletter" });
+  }
+});
+
+// GET /api/newsletter/issues/:id/export-html
+// For pasting into Mailchimp — Margin assembles, Mailchimp sends.
+router.get("/issues/:id/export-html", async (req, res) => {
+  try {
+    const issue = await NewsletterIssue.findOne({
+      _id: req.params.id,
+      ministry_id: req.ministryId,
+    });
+    if (!issue) return res.status(404).json({ error: "Newsletter issue not found" });
+
+    const html = await exportNewsletterAsHtml({ issue, ministry: req.ministry });
+    const filename = `newsletter-${issue.year}-${String(issue.month).padStart(2, "0")}.html`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(html);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to export newsletter HTML" });
   }
 });
 
