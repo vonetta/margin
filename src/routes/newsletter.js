@@ -4,7 +4,7 @@ const { body, validationResult } = require("express-validator");
 const NewsletterIssue = require("../models/NewsletterIssue");
 const { requireRole } = require("../middleware/auth");
 const { buildDefaultSections } = require("../services/newsletterService");
-const { exportNewsletterAsPdf, exportNewsletterAsHtml } = require("../services/newsletterExportService");
+const { exportNewsletterAsPdf, exportNewsletterAsHtml, listNewsletterTemplates } = require("../services/newsletterExportService");
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -19,6 +19,11 @@ const validate = (req, res, next) => {
 // content type. No team-member read access carved out, for one
 // consistent rule instead of a per-route split.
 router.use(requireRole("admin", "leader"));
+
+// GET /api/newsletter/templates
+router.get("/templates", (req, res) => {
+  res.json(listNewsletterTemplates());
+});
 
 // GET /api/newsletter/issues
 router.get("/issues", async (req, res) => {
@@ -56,17 +61,19 @@ router.post(
     body("month").isInt({ min: 1, max: 12 }).withMessage("month must be 1-12"),
     body("year").isInt({ min: 2000, max: 2100 }).withMessage("year is required"),
     body("theme").optional().trim(),
+    body("template").optional().isIn(["classic", "bold", "minimal"]),
   ],
   validate,
   async (req, res) => {
     try {
-      const { month, year, theme } = req.body;
+      const { month, year, theme, template } = req.body;
       const sections = await buildDefaultSections(req.ministryId, month, year);
       const issue = await NewsletterIssue.create({
         ministry_id: req.ministryId,
         month,
         year,
         theme,
+        template,
         sections,
         created_by: req.userId,
       });
@@ -88,6 +95,7 @@ router.put(
     body("status").optional().isIn(["draft", "finalized"]),
     body("sections").optional().isArray(),
     body("cover_photos").optional().isArray(),
+    body("template").optional().isIn(["classic", "bold", "minimal"]),
   ],
   validate,
   async (req, res) => {
@@ -97,6 +105,7 @@ router.put(
       if (req.body.status !== undefined) updates.status = req.body.status;
       if (req.body.sections !== undefined) updates.sections = req.body.sections;
       if (req.body.cover_photos !== undefined) updates.cover_photos = req.body.cover_photos;
+      if (req.body.template !== undefined) updates.template = req.body.template;
 
       const issue = await NewsletterIssue.findOneAndUpdate(
         { _id: req.params.id, ministry_id: req.ministryId },

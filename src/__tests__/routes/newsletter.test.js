@@ -117,6 +117,48 @@ describe("POST /api/newsletter/issues", () => {
     expect(calendar.content.entries).toHaveLength(1);
     expect(birthdays.content.entries).toHaveLength(1);
   });
+
+  it("creates an issue with a chosen template", async () => {
+    const res = await request(app)
+      .post("/api/newsletter/issues")
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ month: 7, year: 2026, template: "bold" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.template).toBe("bold");
+  });
+
+  it("rejects an unknown template", async () => {
+    const res = await request(app)
+      .post("/api/newsletter/issues")
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ month: 7, year: 2026, template: "not-a-real-template" });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/newsletter/templates", () => {
+  it("lists the available templates", async () => {
+    const res = await request(app)
+      .get("/api/newsletter/templates")
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t) => t.id).sort()).toEqual(["bold", "classic", "minimal"]);
+  });
+
+  it("rejects a team member", async () => {
+    const res = await request(app)
+      .get("/api/newsletter/templates")
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${teamToken}`);
+
+    expect(res.status).toBe(403);
+  });
 });
 
 describe("GET /api/newsletter/issues", () => {
@@ -198,6 +240,19 @@ describe("PUT /api/newsletter/issues/:id", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.cover_photos).toEqual(["https://example.com/a.jpg", "https://example.com/b.jpg"]);
+  });
+
+  it("switches an existing issue's template", async () => {
+    const issue = await NewsletterIssue.create({ ministry_id: "nl-route-test", month: 7, year: 2026, sections: [] });
+
+    const res = await request(app)
+      .put(`/api/newsletter/issues/${issue._id}`)
+      .set("x-ministry-id", "nl-route-test")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ template: "minimal" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.template).toBe("minimal");
   });
 
   it("rejects updates by a team member", async () => {

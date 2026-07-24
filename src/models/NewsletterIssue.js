@@ -29,9 +29,8 @@ const newsletterIssueSchema = new mongoose.Schema({
   // Masthead photo collage — only rendered in the HTML/email export (see
   // newsletterExportService's forEmail flag), never the print PDF.
   cover_photos: [{ type: String, trim: true }],
-  // Only one value today — Phase 2 adds more templates to choose from,
-  // at which point this becomes a real choice rather than a fixed default.
-  template: { type: String, enum: ["classic"], default: "classic" },
+  // See src/services/newsletterLayouts/ for what each one renders.
+  template: { type: String, enum: ["classic", "bold", "minimal"], default: "classic" },
   sections: [sectionSchema],
   status: { type: String, enum: ["draft", "finalized"], default: "draft" },
   created_by: { type: String },
